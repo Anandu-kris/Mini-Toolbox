@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+pydantic[email]
+pydantic-settings
+python-dotenv
+motor
+validators
+python-jose[cryptography]
+passlib[bcrypt]
+authlib
+httpx
+itsdangerous
+openai
+beautifulsoup4

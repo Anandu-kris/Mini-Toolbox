@@ -1,0 +1,6 @@
+.env
+.venv
+.vscode
+app/__pycache__
+app/logs
+Dockerfile
