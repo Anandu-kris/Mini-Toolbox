@@ -17,10 +17,10 @@ export default function NotesPage() {
   const isTasks = activeSection === "tasks";
 
   return (
-    <div className="mx-auto max-w-full px-5 mb-1">
+    <div className="h-full px-5">
       <div
         className={cn(
-          "grid gap-6",
+          "grid h-full min-h-0 gap-6",
           isTasks
             ? "lg:grid-cols-[240px_1fr]" // ✅ sidebar + board
             : "lg:grid-cols-[240px_340px_1fr]", // ✅ sidebar + list + editor

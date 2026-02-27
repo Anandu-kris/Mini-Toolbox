@@ -47,7 +47,7 @@ export function NotesListPanel({
     "Failed to load notes";
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4">
+    <section className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 h-full min-h-0 flex flex-col">
       <div className="flex items-center justify-between gap-3">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
@@ -71,7 +71,7 @@ export function NotesListPanel({
         </Button>
       </div>
 
-      <div className="mt-4 space-y-3 max-h-[calc(100dvh-220px)] overflow-y-auto pr-1">
+      <div className="mt-4 flex-1 min-h-0 space-y-3 overflow-y-auto pr-1">
         {!isNotesOrTrash ? (
           <div className="text-sm text-white/60 px-1 py-6">
             Select “Notes” or “Trash” to view items.
@@ -99,7 +99,7 @@ export function NotesListPanel({
                     {n.title}
                   </div>
                   <div className="mt-1 text-xs text-white/60 line-clamp-2">
-                    {(n.contentText) || "—"}
+                    {n.contentText || "—"}
                   </div>
                 </div>
                 <div className="text-xs text-white/50 whitespace-nowrap">

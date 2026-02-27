@@ -15,6 +15,8 @@ from app.routes.auth import router as auth_router
 from app.routes.oauth_google import router as oauth_google_router
 from app.routes.notes import router as notes_router
 from app.routes.tasks import router as tasks_router
+from app.routes.passlock import router as passlock_router
+from app.routes.vault_items import router as vault_items
 
 
 @asynccontextmanager
@@ -65,6 +67,8 @@ app.include_router(auth_router)
 app.include_router(oauth_google_router)
 app.include_router(notes_router)
 app.include_router(tasks_router)
+app.include_router(passlock_router)
+app.include_router(vault_items)
 
 @app.get("/healthz")
 async def healthz(request: Request):

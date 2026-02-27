@@ -17,6 +17,7 @@ import PasswordGeneratorPage from "./pages/PasswordGeneratorPage";
 import NotesPage from "./pages/NotesPage";
 import PomodoroPage from "./pages/PomodoroPage";
 import PassLockPage from "./pages/PassLockPage";
+import WordlePage from "./pages/WordlePage";
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="notes" element={<NotesPage />} />
             <Route path="pomodoro" element={<PomodoroPage />} />
             <Route path="passlock" element={<PassLockPage />} />
+            <Route path="wordle" element={<WordlePage />} />
           </Route>
         </Route>
       </Routes>

@@ -56,11 +56,12 @@ export default function RichTextEditor({ value, onChange, disabled }: Props) {
       if (isProgrammaticChange.current) return;
       onChange(editor.getHTML());
     },
-
     editorProps: {
       attributes: {
         class:
-          "min-h-[340px] p-4 focus:outline-none text-white/90 leading-6 " +
+          // IMPORTANT: fill container + allow scroll parent to work
+          "ProseMirror h-full min-h-0 p-4 focus:outline-none " +
+          "text-white/90 leading-6 " +
           "[&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-semibold " +
           "[&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 " +
           "[&_blockquote]:border-l-4 [&_blockquote]:border-white/20 [&_blockquote]:pl-4 [&_blockquote]:text-white/70 " +
@@ -69,20 +70,17 @@ export default function RichTextEditor({ value, onChange, disabled }: Props) {
     },
   });
 
-  // when note changes (selected note changed), update editor content
+  // when note changes, update editor content
   useEffect(() => {
     if (!editor) return;
 
     const next = value || "";
     const current = editor.getHTML();
-
     if (current === next) return;
 
     isProgrammaticChange.current = true;
-
     editor.commands.setContent(next, { emitUpdate: false });
 
-    // wait for ALL transactions to finish
     setTimeout(() => {
       isProgrammaticChange.current = false;
     }, 0);
@@ -122,7 +120,18 @@ export default function RichTextEditor({ value, onChange, disabled }: Props) {
   );
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+    <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden flex flex-col min-h-0 h-full">
+      {" "}
+      {/* Placeholder styling */}
+      <style>{`
+        .ProseMirror p.is-editor-empty:first-child::before {
+          content: attr(data-placeholder);
+          float: left;
+          color: rgba(255,255,255,0.35);
+          pointer-events: none;
+          height: 0;
+        }
+      `}</style>
       {/* Toolbar */}
       <div className="flex flex-wrap gap-2 p-3 border-b border-white/10 bg-white/4">
         <Btn
@@ -205,7 +214,6 @@ export default function RichTextEditor({ value, onChange, disabled }: Props) {
 
         <div className="w-px h-8 bg-white/10 mx-1" />
 
-        {/* Color chips */}
         <div className="flex items-center gap-2 px-2">
           <Paintbrush className="h-4 w-4 text-white/60" />
           {COLORS.map((c) => (
@@ -236,9 +244,10 @@ export default function RichTextEditor({ value, onChange, disabled }: Props) {
           </Btn>
         </div>
       </div>
-
-      {/* Editor */}
-      <EditorContent editor={editor} />
+      {/* Editor area fills remaining height + scrolls */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }

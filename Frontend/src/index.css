@@ -7,15 +7,10 @@
   font-family: "Fira Mono", monospace;
   line-height: 1.5;
   font-weight: 300;
-  min-height: 100vh;
   scrollbar-width: none;
-  background-image: url("./assets/bgimg.png");
-  background-size: cover;
-  background-position: center;
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -128,11 +123,15 @@
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
+  html,
   body {
-    @apply bg-background text-foreground;
+    height: 100%;
+  }
+
+  body {
+    min-height: 100dvh;
+    background: url("./assets/bgimg.png") center / cover no-repeat fixed;
+    background-color: #0b0b14; /* fallback while image loads */
   }
 }
 
@@ -180,10 +179,18 @@
     0 10px 30px rgba(16, 185, 129, 0.25);
 }
 
-
 @keyframes soft-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.75; filter: drop-shadow(0 0 0 rgba(168,85,247,0)); }
-  50%      { transform: scale(1.08); opacity: 1;    filter: drop-shadow(0 0 10px rgba(168,85,247,0.55)); }
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.75;
+    filter: drop-shadow(0 0 0 rgba(168, 85, 247, 0));
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+    filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.55));
+  }
 }
 
 .animate-soft-pulse {

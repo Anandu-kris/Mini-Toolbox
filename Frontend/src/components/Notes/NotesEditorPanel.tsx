@@ -59,7 +59,7 @@ export function NotesEditorPanel({
   deletePending = false,
 }: NotesEditorPanelProps) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5">
+    <section className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 h-full min-h-0 flex flex-col">
       {!isNotesOrTrash ? (
         <div className="text-white/70">
           Select “Notes” or “Trash” from the left.
@@ -180,7 +180,7 @@ export function NotesEditorPanel({
           </div>
 
           {/* Content */}
-          <div className="mt-4">
+          <div className="mt-4 flex-1 min-h-0">
             <RichTextEditor
               value={draft.contentHtml}
               onChange={(html) =>
