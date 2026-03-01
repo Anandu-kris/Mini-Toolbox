@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from datetime import datetime, timezone
 
+from app.deps.rate_limiter_deps import login_rate_limit
 from app.auth.hash import hash_password, verify_password
 from app.auth.jwt_handler import create_access_token, verify_token, create_refresh_token
 from app.schemas.user_schemas import UserSignup, UserLogin, UserOut
@@ -44,7 +45,7 @@ async def signup(user: UserSignup, db=Depends(get_db)):
 
 
 # Login
-@router.post("/login")
+@router.post("/login", dependencies=[login_rate_limit(ip_capacity=10, ip_window_seconds=60, email_capacity=5, email_window_seconds=60)])
 async def login(user: UserLogin, response: Response, db=Depends(get_db)):
     logger.info(f"[AUTH] login attempt email={user.email}")
 

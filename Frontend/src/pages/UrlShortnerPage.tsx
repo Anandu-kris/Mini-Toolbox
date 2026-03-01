@@ -18,25 +18,6 @@ export default function UrlShortenerPage() {
           overflow: hidden;
         }
 
-        /* Background glow blobs matching auth layout */
-        .usp-blob-1 {
-          position: absolute;
-          width: 500px; height: 500px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);
-          top: -100px; left: -80px;
-          pointer-events: none;
-        }
-
-        .usp-blob-2 {
-          position: absolute;
-          width: 400px; height: 400px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);
-          bottom: -80px; right: 200px;
-          pointer-events: none;
-        }
-
         .usp-grid {
           width: 100%;
           max-width: 1200px;
@@ -167,11 +148,9 @@ export default function UrlShortenerPage() {
       `}</style>
 
       <div className="usp-page">
-        <div className="usp-blob-1"/>
-        <div className="usp-blob-2"/>
 
         <div className="usp-grid">
-
+          {/* Left */}
           <div className="usp-hero">
             <div className="usp-badge">
               <div className="usp-badge-icon"><LinkIcon size={11} color="#fff"/></div>
@@ -220,7 +199,8 @@ export default function UrlShortenerPage() {
               </div>
             </div>
           </div>
-
+          
+          {/* Right */}
           <div className="usp-right">
             <UrlShortener />
           </div>

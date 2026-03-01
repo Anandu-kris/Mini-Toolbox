@@ -38,7 +38,6 @@ async def notes_copilot(payload: NotesCopilotRequest, request: Request, db=Depen
 
     context = build_prompt_context(chunks)
 
-    # cheap chat call
     url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}"}
     body = {

@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
     OPENAI_EMBED_MODEL: str | None = os.getenv("OPENAI_EMBED_MODEL")
     OPENAI_CHAT_MODEL: str | None = os.getenv("OPENAI_CHAT_MODEL")
+    REDIS_URL: str | None = os.getenv("REDIS_URL")
 
     @model_validator(mode="after")
     def validate_env(self):

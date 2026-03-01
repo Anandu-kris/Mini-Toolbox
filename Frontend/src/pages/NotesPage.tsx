@@ -22,8 +22,8 @@ export default function NotesPage() {
         className={cn(
           "grid h-full min-h-0 gap-6",
           isTasks
-            ? "lg:grid-cols-[240px_1fr]" // ✅ sidebar + board
-            : "lg:grid-cols-[240px_340px_1fr]", // ✅ sidebar + list + editor
+            ? "lg:grid-cols-[240px_1fr]" 
+            : "lg:grid-cols-[240px_340px_1fr]", 
         )}
       >
         {/* SIDEBAR */}
@@ -32,7 +32,6 @@ export default function NotesPage() {
           onSectionChange={setActiveSection}
         />
 
-        {/* NOTES/TRASH keep their normal 2-column content */}
         {!isTasks ? (
           <>
             {activeSection === "notes" ? <NotesSection trashed={false} /> : null}
@@ -40,7 +39,7 @@ export default function NotesPage() {
           </>
         ) : null}
 
-        {/* ✅ TASKS takes the big area */}
+        {/* TASKS  */}
         {isTasks ? (
           <div className="min-w-0">
             <TasksSection />

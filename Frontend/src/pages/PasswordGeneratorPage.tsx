@@ -18,22 +18,6 @@ export default function PasswordGeneratorPage() {
           overflow: hidden;
         }
 
-        .pgp-blob-1 {
-          position: absolute;
-          width: 480px; height: 480px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(139,92,246,0.13) 0%, transparent 70%);
-          top: -80px; left: -60px;
-          pointer-events: none;
-        }
-
-        .pgp-blob-2 {
-          position: absolute;
-          width: 380px; height: 380px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 70%);
-          bottom: -60px; right: 180px;
-          pointer-events: none;
-        }
-
         .pgp-grid {
           width: 100%;
           max-width: 1200px;
@@ -152,12 +136,9 @@ export default function PasswordGeneratorPage() {
       `}</style>
 
       <div className="pgp-page">
-        <div className="pgp-blob-1"/>
-        <div className="pgp-blob-2"/>
-
         <div className="pgp-grid">
 
-          {/* ── Left: hero ── */}
+          {/* Left */}
           <div className="pgp-hero">
             <div className="pgp-badge">
               <div className="pgp-badge-icon"><KeyRound size={11} color="#fff"/></div>
@@ -222,7 +203,7 @@ export default function PasswordGeneratorPage() {
             </div>
           </div>
 
-          {/* ── Right: component ── */}
+          {/* Right */}
           <div className="pgp-right">
             <PasswordGenerator />
           </div>

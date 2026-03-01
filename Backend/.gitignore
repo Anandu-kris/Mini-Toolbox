@@ -3,4 +3,6 @@
 .vscode
 app/__pycache__
 app/logs
-Dockerfile
+__pycache__/
+*.pyc
+*.pyo

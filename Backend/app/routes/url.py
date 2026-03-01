@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from app.schemas.url_schemas import ShortenRequest, ShortenResponse, UrlInfo
 from ..utils import generate_short_id
 from app.config import settings
-from app.core.logger import logger  # ✅ ADD THIS
+from app.core.logger import logger 
 
 router = APIRouter(prefix="/api/url", tags=["urls"])
 redirect_router = APIRouter(tags=["redirect"])
