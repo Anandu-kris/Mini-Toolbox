@@ -2,7 +2,13 @@
 import { useEffect, useState } from "react";
 import { useSignup } from "@/hooks/useAuth";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowRight, EyeIcon, EyeOffIcon, CheckCircle2 } from "lucide-react";
+import {
+  Loader2,
+  ArrowRight,
+  EyeIcon,
+  EyeOffIcon,
+  CheckCircle2,
+} from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { MiniToolboxIllustration } from "@/components/MiniIllustration";
@@ -22,7 +28,8 @@ import {
 
 const signupSchema = z
   .object({
-    email: z.string().trim().email("Enter a valid email"),
+    name: z.string().trim().min(2, "Name is required"),
+    email: z.email("Enter a valid email"),
     password: z
       .string()
       .min(6, "Password must be at least 6 characters")
@@ -44,7 +51,7 @@ export function SignUpForm() {
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "", confirm: "" },
+    defaultValues: { name: "", email: "", password: "", confirm: "" },
     mode: "onBlur",
   });
 
@@ -57,7 +64,11 @@ export function SignUpForm() {
 
   function onSubmit(values: SignupFormValues) {
     signupMutation.mutate(
-      { email: values.email.trim(), password: values.password },
+      {
+        name: values.name.trim(),
+        email: values.email.trim(),
+        password: values.password,
+      },
       {
         onSuccess: () => form.reset(),
         onError: (err: unknown) => {
@@ -65,7 +76,7 @@ export function SignUpForm() {
           const msg = anyErr?.response?.data?.detail || "Signup failed";
           form.setError("root", { message: msg });
         },
-      }
+      },
     );
   }
 
@@ -75,12 +86,12 @@ export function SignUpForm() {
   const strength = !passwordValue
     ? 0
     : passwordValue.length < 6
-    ? 1
-    : passwordValue.length < 10
-    ? 2
-    : /[A-Z]/.test(passwordValue) && /[0-9]/.test(passwordValue)
-    ? 4
-    : 3;
+      ? 1
+      : passwordValue.length < 10
+        ? 2
+        : /[A-Z]/.test(passwordValue) && /[0-9]/.test(passwordValue)
+          ? 4
+          : 3;
   const strengthLabel = ["", "Weak", "Fair", "Good", "Strong"];
   const strengthColor = ["", "#ff6b6b", "#f5a623", "#a3e635", "#4ade80"];
 
@@ -330,7 +341,7 @@ export function SignUpForm() {
           font-family: 'Sora', sans-serif;
           font-size: 13px;
           color: rgba(255,255,255,0.35);
-          margin-top: 2px;
+          margin-top: 14px;
           text-decoration: none;
           transition: color 0.2s;
         }
@@ -346,7 +357,6 @@ export function SignUpForm() {
 
       {/* ── Outer shell: form + illustration side-by-side ── */}
       <div className="signup-shell">
-
         {/* Left — form */}
         <div className="signup-form-panel">
           <div className="signup-eyebrow">
@@ -354,20 +364,52 @@ export function SignUpForm() {
             Get started
           </div>
           <h1 className="signup-title">Create your account</h1>
-          <p className="signup-subtitle">Fill in your details below to sign up</p>
+          <p className="signup-subtitle">
+            Fill in your details below to sign up
+          </p>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+            >
+              {/* Name */}
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem
+                    style={{ display: "flex", flexDirection: "column", gap: 3 }}
+                  >
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Your name"
+                        type="text"
+                        autoComplete="name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               {/* Email */}
               <FormField
                 control={form.control}
                 name="email"
                 render={({ field }) => (
-                  <FormItem style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <FormItem
+                    style={{ display: "flex", flexDirection: "column", gap: 3 }}
+                  >
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="you@example.com" type="email" autoComplete="email" {...field}/>
+                      <Input
+                        placeholder="you@example.com"
+                        type="email"
+                        autoComplete="email"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -379,7 +421,9 @@ export function SignUpForm() {
                 control={form.control}
                 name="password"
                 render={({ field }) => (
-                  <FormItem style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <FormItem
+                    style={{ display: "flex", flexDirection: "column", gap: 3 }}
+                  >
                     <FormLabel>Password</FormLabel>
                     <FormControl>
                       <div className="password-field-wrapper">
@@ -388,25 +432,42 @@ export function SignUpForm() {
                           type={showPassword ? "text" : "password"}
                           autoComplete="new-password"
                           {...field}
-                          style={{ paddingRight: '44px' }}
+                          style={{ paddingRight: "44px" }}
                         />
-                        <button type="button" className="eye-btn" onClick={() => setShowPassword(s => !s)} tabIndex={-1}>
-                          {showPassword ? <EyeOffIcon size={16}/> : <EyeIcon size={16}/>}
+                        <button
+                          type="button"
+                          className="eye-btn"
+                          onClick={() => setShowPassword((s) => !s)}
+                          tabIndex={-1}
+                        >
+                          {showPassword ? (
+                            <EyeOffIcon size={16} />
+                          ) : (
+                            <EyeIcon size={16} />
+                          )}
                         </button>
                       </div>
                     </FormControl>
                     {passwordValue && (
                       <>
                         <div className="strength-bar-track">
-                          {[1,2,3,4].map(i => (
+                          {[1, 2, 3, 4].map((i) => (
                             <div
                               key={i}
                               className="strength-bar-seg"
-                              style={{ background: i <= strength ? strengthColor[strength] : undefined }}
+                              style={{
+                                background:
+                                  i <= strength
+                                    ? strengthColor[strength]
+                                    : undefined,
+                              }}
                             />
                           ))}
                         </div>
-                        <div className="strength-label" style={{ color: strengthColor[strength] }}>
+                        <div
+                          className="strength-label"
+                          style={{ color: strengthColor[strength] }}
+                        >
                           {strengthLabel[strength]}
                         </div>
                       </>
@@ -421,7 +482,9 @@ export function SignUpForm() {
                 control={form.control}
                 name="confirm"
                 render={({ field }) => (
-                  <FormItem style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <FormItem
+                    style={{ display: "flex", flexDirection: "column", gap: 3 }}
+                  >
                     <FormLabel>Confirm Password</FormLabel>
                     <FormControl>
                       <div className="password-field-wrapper">
@@ -430,10 +493,19 @@ export function SignUpForm() {
                           type={showConfirm ? "text" : "password"}
                           autoComplete="new-password"
                           {...field}
-                          style={{ paddingRight: '44px' }}
+                          style={{ paddingRight: "44px" }}
                         />
-                        <button type="button" className="eye-btn" onClick={() => setShowConfirm(s => !s)} tabIndex={-1}>
-                          {showConfirm ? <EyeOffIcon size={16}/> : <EyeIcon size={16}/>}
+                        <button
+                          type="button"
+                          className="eye-btn"
+                          onClick={() => setShowConfirm((s) => !s)}
+                          tabIndex={-1}
+                        >
+                          {showConfirm ? (
+                            <EyeOffIcon size={16} />
+                          ) : (
+                            <EyeIcon size={16} />
+                          )}
                         </button>
                       </div>
                     </FormControl>
@@ -450,16 +522,27 @@ export function SignUpForm() {
 
               {signupMutation.isSuccess && (
                 <div className="success-banner">
-                  <CheckCircle2 size={16}/>
+                  <CheckCircle2 size={16} />
                   Account created! Redirecting to login…
                 </div>
               )}
 
-              <Button type="submit" className="btn-signup-primary" disabled={busy}>
-                {busy
-                  ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }}/>
-                  : <><span>Create account</span><ArrowRight size={16}/></>
-                }
+              <Button
+                type="submit"
+                className="btn-signup-primary"
+                disabled={busy}
+              >
+                {busy ? (
+                  <Loader2
+                    size={18}
+                    style={{ animation: "spin 1s linear infinite" }}
+                  />
+                ) : (
+                  <>
+                    <span>Create account</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
               </Button>
             </form>
           </Form>
@@ -473,7 +556,6 @@ export function SignUpForm() {
         <div className="signup-illustration-panel">
           <MiniToolboxIllustration />
         </div>
-
       </div>
     </>
   );

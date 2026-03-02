@@ -1,19 +1,15 @@
 import { Link, Outlet } from "react-router-dom";
-import { Sparkles, LogOut } from "lucide-react";
-import { useLogout } from "@/hooks/useLogout";
+import { Sparkles } from "lucide-react";
 import ShinyText from "@/components/Animation/ShinyText";
+import AccountDropdown from "@/components/AccountDropdown";
+import { useCurrentUser } from "@/hooks/useAuth";
 
 export default function AppLayout() {
-  const { mutateAsync: logout, isPending } = useLogout();
+  const { data: me } = useCurrentUser();
 
-  async function handleLogout() {
-    try {
-      await logout();
-      window.location.href = "/login";
-    } catch (err) {
-      console.log("Logout failed", err);
-    }
-  }
+const name = me?.name ?? undefined;
+const email = me?.email ?? undefined;
+const avatarUrl = me?.avatarUrl
 
   return (
     <>
@@ -120,19 +116,17 @@ export default function AppLayout() {
                 pauseOnHover={false}
                 disabled={false}
               />
-              <span className="app-logo-tagline">Productivity tools in one place</span>
+              <span className="app-logo-tagline">
+                Productivity tools in one place
+              </span>
             </div>
           </Link>
 
-          {/* Logout */}
-          <button
-            className="app-logout-btn"
-            onClick={handleLogout}
-            disabled={isPending}
-          >
-            <LogOut size={14} />
-            {isPending ? "Logging out…" : "Logout"}
-          </button>
+          <AccountDropdown
+            name={name}
+            email={email}
+            avatarUrl={avatarUrl}
+          />
         </header>
 
         <main className="flex-1 min-h-0 pt-6 pb-10">

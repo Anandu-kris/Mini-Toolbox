@@ -16,4 +16,6 @@ export const useCurrentUser = () =>
     queryKey: ["auth", "me"],
     queryFn: authService.getCurrentUser,
     retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
