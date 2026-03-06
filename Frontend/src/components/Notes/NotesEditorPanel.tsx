@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import RichTextEditor from "./RichTextEdtor";
-
+import { AiFloatingPanel } from "./ai/AiFloatingPanel";
 import type { NoteItem } from "@/services/notes.service";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved";
@@ -59,7 +59,7 @@ export function NotesEditorPanel({
   deletePending = false,
 }: NotesEditorPanelProps) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5">
+    <section className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 h-full min-h-0 flex flex-col">
       {!isNotesOrTrash ? (
         <div className="text-white/70">
           Select “Notes” or “Trash” from the left.
@@ -180,7 +180,7 @@ export function NotesEditorPanel({
           </div>
 
           {/* Content */}
-          <div className="mt-4">
+          <div className="mt-4 flex-1 min-h-0">
             <RichTextEditor
               value={draft.contentHtml}
               onChange={(html) =>
@@ -189,6 +189,29 @@ export function NotesEditorPanel({
               disabled={trashed}
             />
           </div>
+          <AiFloatingPanel
+            noteId={selected?.id}
+            disabled={trashed}
+            onOpenSource={(nid, snippet) => {
+              // For now: you can switch note + show snippet
+              // If your parent controls selected note, pass a prop to handle this.
+              console.log("open source", nid, snippet);
+            }}
+            onApplyToEditor={(plainText) => {
+              // You use HTML editor → simplest apply: wrap in <p> lines
+              const html = plainText
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map(
+                  (line) =>
+                    `<p>${line.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</p>`,
+                )
+                .join("");
+
+              onDraftChange((d) => ({ ...d, contentHtml: html }));
+            }}
+          />
 
           {trashed ? (
             <div className="mt-3 text-xs text-white/50">

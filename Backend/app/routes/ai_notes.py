@@ -1,11 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from __future__ import annotations
+
+from typing import Any, Dict
+
 import httpx
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException, Request
+
 from app.config import settings
+from app.deps.ai_deps import rl_dep, log_ai_event, Timer
 from app.deps.auth_deps import get_current_user_email
 from app.services.ai_notes import vector_search_chunks, build_prompt_context
+from app.schemas.ai_notes_schema import (
+    NotesCopilotRequest,
+    NotesCopilotResponse,
+    NoteActionResponse,
+)
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
+
 
 def get_db(request: Request):
     db = getattr(request.app.state, "db", None)
@@ -13,39 +25,31 @@ def get_db(request: Request):
         raise HTTPException(status_code=503, detail="DB not ready")
     return db
 
-class NotesCopilotRequest(BaseModel):
-    query: str
 
-class NotesCopilotResponse(BaseModel):
-    answer: str
-    sources: list
+# -------------------------
+# Basic limits
+# -------------------------
+MAX_QUERY_CHARS = 500
+MAX_NOTE_CHARS = 12000
+COPILOT_TOP_K = 6
+COPILOT_TOP_K_MAX = 10
 
-@router.post("/notes", response_model=NotesCopilotResponse)
-async def notes_copilot(payload: NotesCopilotRequest, request: Request, db=Depends(get_db)):
-    user_email = get_current_user_email(request)
-    q = payload.query.strip()
-    if not q:
-        raise HTTPException(status_code=400, detail="Query required")
 
-    chunks = await vector_search_chunks(
-        db,
-        user_email=user_email,
-        query=q,
-        api_key=settings.OPENAI_API_KEY,
-        embed_model=settings.OPENAI_EMBED_MODEL,
-        top_k=6,
-    )
+def clamp_text(s: str, max_chars: int) -> str:
+    s = (s or "").strip()
+    if len(s) <= max_chars:
+        return s
+    return s[:max_chars] + "\n\n[TRUNCATED]"
 
-    context = build_prompt_context(chunks)
 
-    # cheap chat call
+async def openai_chat(*, system: str, user: str) -> str:
     url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}"}
     body = {
         "model": settings.OPENAI_CHAT_MODEL,
         "messages": [
-            {"role": "system", "content": "You are Notes Copilot. Use ONLY the provided context. If the answer isn't in context, say you don't know."},
-            {"role": "user", "content": f"QUESTION:\n{q}\n\nCONTEXT:\n{context}"},
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
         ],
         "temperature": 0.2,
     }
@@ -56,5 +60,286 @@ async def notes_copilot(payload: NotesCopilotRequest, request: Request, db=Depen
             raise HTTPException(status_code=502, detail=f"OpenAI chat failed: {r.text}")
         data = r.json()
 
-    answer = data["choices"][0]["message"]["content"]
-    return {"answer": answer, "sources": chunks}
+    return data["choices"][0]["message"]["content"]
+
+
+async def get_note_or_404(db, *, email: str, note_id: str) -> Dict[str, Any]:
+    try:
+        oid = ObjectId(note_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid note id")
+
+    doc = await db.notes.find_one({"_id": oid, "userEmail": email})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    if doc.get("isTrashed", False):
+        raise HTTPException(status_code=400, detail="Note is trashed")
+
+    return doc
+
+# -------------------------
+# Endpoints
+# -------------------------
+
+@router.post(
+    "/notes",
+    response_model=NotesCopilotResponse,
+    dependencies=[Depends(rl_dep("copilot", 20, 60))], 
+)
+async def notes_copilot(
+    payload: NotesCopilotRequest,
+    db=Depends(get_db),
+    user_email: str = Depends(get_current_user_email),
+):
+    t = Timer()
+    q = (payload.query or "").strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Query required")
+
+    top_k = min(max(int(payload.top_k or COPILOT_TOP_K), 1), COPILOT_TOP_K_MAX)
+
+    try:
+        chunks = await vector_search_chunks(
+            db,
+            user_email=user_email,
+            query=q,
+            api_key=settings.OPENAI_API_KEY,
+            embed_model=settings.OPENAI_EMBED_MODEL,
+            top_k=top_k,
+        )
+
+        context = build_prompt_context(chunks)
+
+        system = (
+            "You are Notes Copilot.\n"
+            "Use ONLY the provided context.\n"
+            "If the answer isn't in the context, say you don't know.\n"
+            "Keep the answer concise and practical.\n"
+        )
+        user = f"QUESTION:\n{q}\n\nCONTEXT:\n{context}"
+
+        answer = await openai_chat(system=system, user=user)
+
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="copilot",
+            ok=True,
+            latency_ms=t.ms(),
+            meta={"queryChars": len(q), "topK": top_k, "sources": len(chunks)},
+        )
+        return {"answer": answer, "sources": chunks}
+
+    except HTTPException as e:
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="copilot",
+            ok=False,
+            latency_ms=t.ms(),
+            meta={"queryChars": len(q), "topK": top_k},
+            error=str(e.detail),
+        )
+        raise
+    except Exception as e:
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="copilot",
+            ok=False,
+            latency_ms=t.ms(),
+            meta={"queryChars": len(q), "topK": top_k},
+            error=str(e),
+        )
+        raise
+
+
+@router.post(
+    "/notes/{note_id}/summarize",
+    response_model=NoteActionResponse,
+    dependencies=[Depends(rl_dep("summarize", 30, 60))],  
+)
+async def summarize_note(
+    note_id: str,
+    db=Depends(get_db),
+    user_email: str = Depends(get_current_user_email),
+):
+    t = Timer()
+    try:
+        note = await get_note_or_404(db, email=user_email, note_id=note_id)
+        title = (note.get("title") or "").strip()
+        raw_text = note.get("contentText") or ""
+        text = clamp_text(raw_text, MAX_NOTE_CHARS)
+
+        system = (
+            "You summarize user notes.\n"
+            "Return a clean summary with:\n"
+            "1) 3-6 bullet key points\n"
+            "2) a 1-paragraph short summary\n"
+            "Do not invent facts that aren't in the note.\n"
+        )
+        user = f"TITLE:\n{title}\n\nNOTE:\n{text}\n\nMake it concise."
+        result = await openai_chat(system=system, user=user)
+
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="summarize",
+            note_id=note_id,
+            ok=True,
+            latency_ms=t.ms(),
+            meta={"noteChars": len(raw_text), "sentChars": len(text)},
+        )
+        return {"noteId": note_id, "result": result}
+
+    except HTTPException as e:
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="summarize",
+            note_id=note_id,
+            ok=False,
+            latency_ms=t.ms(),
+            error=str(e.detail),
+        )
+        raise
+    except Exception as e:
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="summarize",
+            note_id=note_id,
+            ok=False,
+            latency_ms=t.ms(),
+            error=str(e),
+        )
+        raise
+
+
+@router.post(
+    "/notes/{note_id}/shorten",
+    response_model=NoteActionResponse,
+    dependencies=[Depends(rl_dep("shorten", 30, 60))], 
+)
+async def shorten_note(
+    note_id: str,
+    db=Depends(get_db),
+    user_email: str = Depends(get_current_user_email),
+):
+    t = Timer()
+    try:
+        note = await get_note_or_404(db, email=user_email, note_id=note_id)
+        title = (note.get("title") or "").strip()
+        raw_text = note.get("contentText") or ""
+        text = clamp_text(raw_text, MAX_NOTE_CHARS)
+
+        system = (
+            "You rewrite notes to be shorter while preserving meaning.\n"
+            "Rules:\n"
+            "- Keep all important details\n"
+            "- Remove repetition\n"
+            "- Keep headings if present\n"
+            "- Output ONLY the rewritten note text (no extra commentary)\n"
+        )
+        user = f"TITLE:\n{title}\n\nNOTE:\n{text}\n\nRewrite this note to be ~40-60% shorter."
+        result = await openai_chat(system=system, user=user)
+
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="shorten",
+            note_id=note_id,
+            ok=True,
+            latency_ms=t.ms(),
+            meta={"noteChars": len(raw_text), "sentChars": len(text)},
+        )
+        return {"noteId": note_id, "result": result}
+
+    except HTTPException as e:
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="shorten",
+            note_id=note_id,
+            ok=False,
+            latency_ms=t.ms(),
+            error=str(e.detail),
+        )
+        raise
+    except Exception as e:
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="shorten",
+            note_id=note_id,
+            ok=False,
+            latency_ms=t.ms(),
+            error=str(e),
+        )
+        raise
+
+
+@router.post(
+    "/notes/{note_id}/highlights",
+    response_model=NoteActionResponse,
+    dependencies=[Depends(rl_dep("highlights", 30, 60))],
+)
+async def highlight_note(
+    note_id: str,
+    db=Depends(get_db),
+    user_email: str = Depends(get_current_user_email),
+):
+    t = Timer()
+    try:
+        note = await get_note_or_404(db, email=user_email, note_id=note_id)
+        title = (note.get("title") or "").strip()
+        raw_text = note.get("contentText") or ""
+        text = clamp_text(raw_text, MAX_NOTE_CHARS)
+
+        system = (
+            "You extract highlights from notes.\n"
+            "Return:\n"
+            "- Action items (checkbox bullets)\n"
+            "- Decisions\n"
+            "- Dates/Deadlines (if any)\n"
+            "- Key terms\n"
+            "If a section is not applicable, write 'None'.\n"
+            "Do not invent anything.\n"
+        )
+        user = f"TITLE:\n{title}\n\nNOTE:\n{text}"
+        result = await openai_chat(system=system, user=user)
+
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="highlights",
+            note_id=note_id,
+            ok=True,
+            latency_ms=t.ms(),
+            meta={"noteChars": len(raw_text), "sentChars": len(text)},
+        )
+        return {"noteId": note_id, "result": result}
+
+    except HTTPException as e:
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="highlights",
+            note_id=note_id,
+            ok=False,
+            latency_ms=t.ms(),
+            error=str(e.detail),
+        )
+        raise
+    except Exception as e:
+        await log_ai_event(
+            db,
+            user_email=user_email,
+            action="highlights",
+            note_id=note_id,
+            ok=False,
+            latency_ms=t.ms(),
+            error=str(e),
+        )
+        raise

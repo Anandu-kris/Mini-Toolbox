@@ -17,6 +17,9 @@ import PasswordGeneratorPage from "./pages/PasswordGeneratorPage";
 import NotesPage from "./pages/NotesPage";
 import PomodoroPage from "./pages/PomodoroPage";
 import PassLockPage from "./pages/PassLockPage";
+import WordlePage from "./pages/WordlePage";
+import ErrorPage from "./pages/ErrorPage";
+import ProfilePage from "./pages/ProfilePage";
 
 export default function App() {
   return (
@@ -25,6 +28,8 @@ export default function App() {
 
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
+
+        <Route path="*" element={<ErrorPage />}></Route>
 
         {/* PUBLIC ROUTES */}
         <Route element={<PublicRoute />}>
@@ -37,10 +42,10 @@ export default function App() {
         {/* PROTECTED ROUTES */}
         <Route element={<ProtectedRoute />}>
           <Route path="/home" element={<AppLayout />}>
+            <Route path="profile" element={<ProfilePage />} />
             <Route element={<HomeLayout />}>
               <Route index element={<Home />} />
             </Route>
-
             <Route path="url-shortener" element={<UrlShortenerPage />} />
             <Route
               path="password-generator"
@@ -49,6 +54,7 @@ export default function App() {
             <Route path="notes" element={<NotesPage />} />
             <Route path="pomodoro" element={<PomodoroPage />} />
             <Route path="passlock" element={<PassLockPage />} />
+            <Route path="wordle" element={<WordlePage />} />
           </Route>
         </Route>
       </Routes>

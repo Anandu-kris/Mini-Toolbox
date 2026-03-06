@@ -1,11 +1,10 @@
-import PassLock from "@/components/PassLock";
+import { PassLockProvider } from "@/components/Passlock/PassLockProvider";
+import PassLockGate from "@/components/Passlock/PassLockGate";
 
-const PassLockPage = () => {
+export default function PassLockPage() {
   return (
-    <div className="flex justify-center lg:justify-center text-amber-50">
-      <PassLock />
-    </div>
+    <PassLockProvider>
+      <PassLockGate />
+    </PassLockProvider>
   );
-};
-
-export default PassLockPage;
+}

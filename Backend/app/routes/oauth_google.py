@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.auth.jwt_handler import create_access_token, create_refresh_token
-from app.core.logger import logger  # ✅ ADD THIS
+from app.core.logger import logger 
 
 router = APIRouter(prefix="/auth/google", tags=["OAuth"])
 

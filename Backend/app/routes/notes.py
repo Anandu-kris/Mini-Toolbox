@@ -5,14 +5,15 @@ from typing import List, Optional
 from bson import ObjectId
 from pymongo import ReturnDocument
 
-
 from app.schemas.notes_schema import NoteCreate, NoteUpdate, NoteOut
 from app.deps.auth_deps import get_current_user_email
 from app.core.logger import logger
 from app.util.html_text import html_to_text
+from app.config import settings
+
+from app.services.ai_notes import upsert_note_chunks
 
 router = APIRouter(prefix="/api/notes", tags=["Notes"])
-
 
 def get_db(request: Request):
     db = getattr(request.app.state, "db", None)
@@ -27,7 +28,7 @@ def to_note_out(doc) -> NoteOut:
         id=str(doc["_id"]),
         title=doc["title"],
         contentHtml=doc.get("contentHtml", ""),
-        contentText=doc.get("contentText", ""), 
+        contentText=doc.get("contentText", ""),
         tags=doc.get("tags", []),
         pinned=doc.get("pinned", False),
         isTrashed=doc.get("isTrashed", False),
@@ -39,23 +40,26 @@ def to_note_out(doc) -> NoteOut:
 @router.post("/create", response_model=NoteOut)
 async def create_note(
     payload: NoteCreate,
-    request: Request,
     db=Depends(get_db),
+    email: str = Depends(get_current_user_email), 
 ):
-    email = get_current_user_email(request)
     now = datetime.now(timezone.utc)
 
+    title = (payload.title or "").strip()
+    content_html = payload.contentHtml or ""
+    content_text = html_to_text(content_html)
+
     logger.info(
-        f"[NOTES] create_note user={email} "
-        f"title_len={len(payload.title or '')} tags_count={len(payload.tags or [])} pinned={payload.pinned}"
+        f"[NOTES] create_note user={email} title_len={len(title)} "
+        f"tags_count={len(payload.tags or [])} pinned={payload.pinned}"
     )
 
     doc = {
         "userEmail": email,
-        "title": payload.title.strip(),
-        "contentHtml": payload.contentHtml,
-        "contentText": html_to_text(payload.contentHtml),
-        "tags": [t.strip() for t in payload.tags if t.strip()],
+        "title": title,
+        "contentHtml": content_html,
+        "contentText": content_text,
+        "tags": [t.strip() for t in (payload.tags or []) if t.strip()],
         "pinned": payload.pinned,
         "createdAt": now,
         "updatedAt": now,
@@ -66,14 +70,29 @@ async def create_note(
     res = await db.notes.insert_one(doc)
     doc["_id"] = res.inserted_id
 
+    try:
+        await upsert_note_chunks(
+            db,
+            user_email=email,
+            note_id=str(doc["_id"]),
+            title=doc["title"],
+            content=doc.get("contentText", "") or "",  
+            api_key=settings.OPENAI_API_KEY,
+            embed_model=settings.OPENAI_EMBED_MODEL,
+        )
+    except Exception as e:
+        logger.exception(
+            f"[AI] upsert_note_chunks failed on create note_id={doc['_id']} user={email}: {e}"
+        )
+
     logger.info(f"[NOTES] created note_id={doc['_id']} user={email}")
     return to_note_out(doc)
 
 
 @router.get("", response_model=List[NoteOut])
 async def list_notes(
-    request: Request,
     db=Depends(get_db),
+    email: str = Depends(get_current_user_email),
     limit: int = Query(50, ge=1, le=200),
     skip: int = Query(0, ge=0),
     q: Optional[str] = Query(None, description="Search in title/contentHtml/tags"),
@@ -81,8 +100,6 @@ async def list_notes(
     tag: Optional[str] = Query(None, description="Filter by single tag"),
     trashed: Optional[bool] = Query(False),
 ):
-    email = get_current_user_email(request)
-
     logger.info(
         f"[NOTES] list_notes user={email} limit={limit} skip={skip} "
         f"q={'yes' if q else 'no'} pinned={pinned} tag={tag} trashed={trashed}"
@@ -122,10 +139,9 @@ async def list_notes(
 @router.get("/{note_id}", response_model=NoteOut)
 async def get_note(
     note_id: str,
-    request: Request,
     db=Depends(get_db),
+    email: str = Depends(get_current_user_email), 
 ):
-    email = get_current_user_email(request)
     logger.info(f"[NOTES] get_note user={email} note_id={note_id}")
 
     try:
@@ -146,10 +162,9 @@ async def get_note(
 async def update_note(
     note_id: str,
     payload: NoteUpdate,
-    request: Request,
     db=Depends(get_db),
+    email: str = Depends(get_current_user_email), 
 ):
-    email = get_current_user_email(request)
     logger.info(f"[NOTES] update_note user={email} note_id={note_id}")
 
     try:
@@ -162,15 +177,19 @@ async def update_note(
 
     if payload.title is not None:
         update["title"] = payload.title.strip()
+
+    # content update
     if payload.contentHtml is not None:
         update["contentHtml"] = payload.contentHtml
-        update["contentText"] = html_to_text(payload.contentHtml)
+        update["contentText"] = html_to_text(payload.contentHtml or "")
+
     if payload.tags is not None:
         update["tags"] = [t.strip() for t in payload.tags if t.strip()]
     if payload.pinned is not None:
         update["pinned"] = payload.pinned
     if payload.isTrashed is not None:
         update["isTrashed"] = payload.isTrashed
+        update["trashedAt"] = datetime.now(timezone.utc) if payload.isTrashed else None
 
     if not update:
         logger.warning(f"[NOTES] update_note no fields user={email} note_id={note_id}")
@@ -192,6 +211,23 @@ async def update_note(
         logger.warning(f"[NOTES] update_note not found user={email} note_id={note_id}")
         raise HTTPException(status_code=404, detail="Note not found")
 
+    try:
+        is_trashed = bool(res.get("isTrashed", False))
+        if is_trashed:
+            await db.note_chunks.delete_many({"userEmail": email, "noteId": str(res["_id"])})
+        else:
+            await upsert_note_chunks(
+                db,
+                user_email=email,
+                note_id=str(res["_id"]),
+                title=res.get("title", "") or "",
+                content=res.get("contentText", "") or "",  
+                api_key=settings.OPENAI_API_KEY,
+                embed_model=settings.OPENAI_EMBED_MODEL,
+            )
+    except Exception as e:
+        logger.exception(f"[AI] embedding sync failed on update note_id={note_id} user={email}: {e}")
+
     logger.info(f"[NOTES] update_note success user={email} note_id={note_id}")
     return to_note_out(res)
 
@@ -199,10 +235,9 @@ async def update_note(
 @router.delete("/{note_id}")
 async def delete_note(
     note_id: str,
-    request: Request,
     db=Depends(get_db),
+    email: str = Depends(get_current_user_email),  
 ):
-    email = get_current_user_email(request)
     logger.info(f"[NOTES] delete_note user={email} note_id={note_id}")
 
     try:
@@ -215,6 +250,11 @@ async def delete_note(
     if res.deleted_count == 0:
         logger.warning(f"[NOTES] delete_note not found user={email} note_id={note_id}")
         raise HTTPException(status_code=404, detail="Note not found")
+
+    try:
+        await db.note_chunks.delete_many({"userEmail": email, "noteId": note_id})
+    except Exception as e:
+        logger.exception(f"[AI] delete note_chunks failed note_id={note_id} user={email}: {e}")
 
     logger.info(f"[NOTES] delete_note success user={email} note_id={note_id}")
     return {"ok": True}
