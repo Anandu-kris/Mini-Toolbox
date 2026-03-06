@@ -1,15 +1,16 @@
 from fastapi import Request, HTTPException, status
 from app.auth.jwt_handler import verify_token
-from typing import Tuple
-
 
 def get_current_user_email(request: Request) -> str:
     access = request.cookies.get("access_token")
     refresh = request.cookies.get("refresh_token")
 
-    payload = verify_token(access)
-    if payload and payload.get("type") == "access":
-        return payload.get("sub")
+    if access:
+        payload = verify_token(access)
+        if payload and payload.get("type") == "access":
+            email = payload.get("sub")
+            if email:
+                return email
 
     if not refresh:
         raise HTTPException(
@@ -24,7 +25,14 @@ def get_current_user_email(request: Request) -> str:
             detail="Invalid Token",
         )
 
-    return refresh_payload.get("sub")
+    email = refresh_payload.get("sub")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Token",
+        )
+
+    return email
 
 # Avatar deps
 def make_avatar_url(user: dict | None) -> str | None:

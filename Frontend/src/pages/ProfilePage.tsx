@@ -182,7 +182,7 @@ export default function ProfilePage() {
         }
 
         .profile-card{
-          width: min(650px, 100%);
+          width: min(1440px, 100%);
           border-radius: 22px;
           border: 1px solid rgba(255,255,255,0.08);
           background: rgba(255,255,255,0.04);
@@ -201,10 +201,10 @@ export default function ProfilePage() {
           gap: 12px;
         }
         .profile-title{
-          font-size: 16px;
+          font-size: 18px;
           font-weight: 650;
           color: rgba(255,255,255,0.92);
-          letter-spacing: 0.01em;
+          letter-spacing: 0.05em;
         }
         .profile-sub{
           margin-top: 4px;

@@ -129,7 +129,7 @@ const avatarUrl = me?.avatarUrl
           />
         </header>
 
-        <main className="flex-1 min-h-0 pt-6 pb-10">
+        <main className="flex-1 min-h-0 pt-2 pb-10">
           <Outlet />
         </main>
       </div>

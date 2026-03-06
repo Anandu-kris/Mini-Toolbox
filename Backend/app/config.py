@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
     OPENAI_EMBED_MODEL: str | None = os.getenv("OPENAI_EMBED_MODEL")
     OPENAI_CHAT_MODEL: str | None = os.getenv("OPENAI_CHAT_MODEL")
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "gemini")
+    GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     REDIS_URL: str | None = os.getenv("REDIS_URL")
 
     @model_validator(mode="after")

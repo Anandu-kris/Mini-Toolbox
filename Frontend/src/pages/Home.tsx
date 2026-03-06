@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import FeatureCard from "@/components/FeatureCard";
-import { LinkIcon, KeyRound, Notebook, Timer, LockKeyhole, Dice6 } from "lucide-react";
+import { LinkIcon, KeyRound, Notebook, Timer, LockKeyhole, Gamepad } from "lucide-react";
 import TextType from "@/components/Animation/TextType";
 
 export default function Home() {
@@ -68,7 +68,7 @@ export default function Home() {
         <FeatureCard
           title="Wordle"
           description="Guess the word of the day"
-          icon={<Dice6 className="h-6 w-6" />}
+          icon={<Gamepad className="h-6 w-6" />}
           variant="rose"
           onClick={() => navigate("/home/wordle")}
         />
