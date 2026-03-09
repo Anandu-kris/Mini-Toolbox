@@ -16,6 +16,8 @@ from app.routes.vault_items import router as vault_items
 from app.routes.health import router as health_router
 from app.routes.ai_notes import router as ai_router
 from app.routes.wordle import router as wordle_router
+from app.routes.pomodoro_audio import router as pomodoro_audio_router
+
 from app.middleware.logging import log_requests
 from fastapi.middleware.gzip import GZipMiddleware
 
@@ -76,3 +78,5 @@ app.include_router(vault_items)
 app.include_router(health_router)
 app.include_router(ai_router)
 app.include_router(wordle_router)
+app.include_router(pomodoro_audio_router)
+
