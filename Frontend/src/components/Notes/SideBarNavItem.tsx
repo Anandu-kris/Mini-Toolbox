@@ -1,30 +1,37 @@
-import React from "react";
 import { cn } from "@/lib/utils";
 
 type SidebarNavItemProps = {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
-  onClick: () => void;
+  collapsed?: boolean;
+  onClick?: () => void;
 };
 
 export default function SidebarNavItem({
   icon,
   label,
   active = false,
+  collapsed = false,
   onClick,
 }: SidebarNavItemProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      title={collapsed ? label : undefined}
       className={cn(
-        "w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition",
-        "text-white/70 hover:text-white hover:bg-white/8",
-        active && "bg-white/10 text-white border border-white/10",
+        "flex w-full items-center rounded-xl border border-transparent text-white/80 transition",
+        "hover:bg-white/10 hover:text-white",
+        active && "bg-white/10 text-white border-white/10",
+        collapsed
+          ? "justify-center px-2 py-3"
+          : "gap-3 px-3 py-2.5 justify-start",
       )}
     >
-      <span className="text-white/70">{icon}</span>
-      <span>{label}</span>
+      <span className="flex h-5 w-5 items-center justify-center">{icon}</span>
+
+      {!collapsed && <span className="truncate text-sm">{label}</span>}
     </button>
   );
 }

@@ -9,7 +9,6 @@ import {
 
 import { NotesSection } from "@/components/Notes/NotesSection";
 import { TasksSection } from "@/components/Tasks/TasksSection";
-import { cn } from "@/lib/utils";
 
 export default function NotesPage() {
   const [activeSection, setActiveSection] = useState<Section>("notes");
@@ -18,33 +17,21 @@ export default function NotesPage() {
 
   return (
     <div className="h-full px-5">
-      <div
-        className={cn(
-          "grid h-full min-h-0 gap-6",
-          isTasks
-            ? "lg:grid-cols-[240px_1fr]" 
-            : "lg:grid-cols-[240px_340px_1fr]", 
-        )}
-      >
-        {/* SIDEBAR */}
+      <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[auto_1fr]">
         <WorkspaceSidebar
           activeSection={activeSection}
           onSectionChange={setActiveSection}
         />
 
-        {!isTasks ? (
-          <>
-            {activeSection === "notes" ? <NotesSection trashed={false} /> : null}
-            {activeSection === "trash" ? <NotesSection trashed={true} /> : null}
-          </>
-        ) : null}
-
-        {/* TASKS  */}
-        {isTasks ? (
-          <div className="min-w-0">
+        <div className="min-w-0">
+          {isTasks ? (
             <TasksSection />
-          </div>
-        ) : null}
+          ) : activeSection === "notes" ? (
+            <NotesSection trashed={false} />
+          ) : activeSection === "trash" ? (
+            <NotesSection trashed />
+          ) : null}
+        </div>
       </div>
     </div>
   );

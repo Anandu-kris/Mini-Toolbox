@@ -12,6 +12,7 @@ import {
 
 import { NotesListPanel } from "@/components/Notes/NotesListPanel";
 import { NotesEditorPanel } from "@/components/Notes/NotesEditorPanel";
+import { OrbitLoader } from "../ui/Loader";
 
 function sameTags(a: string[], b: string[]) {
   if (a.length !== b.length) return false;
@@ -23,18 +24,21 @@ type NotesSectionProps = {
   trashed: boolean;
 };
 
+type NoteDraft = {
+  title: string;
+  contentHtml: string;
+  tags: string[];
+};
+
 export function NotesSection({ trashed }: NotesSectionProps) {
   const isNotesOrTrash = true;
 
   const [q, setQ] = useState("");
   const [selectedId, setSelectedId] = useState<string>("");
+  const [draftNoteId, setDraftNoteId] = useState<string>("");
   const [tagInput, setTagInput] = useState("");
 
-  const [draft, setDraft] = useState<{
-    title: string;
-    contentHtml: string;
-    tags: string[];
-  }>({
+  const [draft, setDraft] = useState<NoteDraft>({
     title: "",
     contentHtml: "",
     tags: [],
@@ -44,11 +48,7 @@ export function NotesSection({ trashed }: NotesSectionProps) {
     "idle" | "dirty" | "saving" | "saved"
   >("idle");
 
-  const [baseline, setBaseline] = useState<{
-    title: string;
-    contentHtml: string;
-    tags: string[];
-  }>({
+  const [baseline, setBaseline] = useState<NoteDraft>({
     title: "",
     contentHtml: "",
     tags: [],
@@ -74,58 +74,69 @@ export function NotesSection({ trashed }: NotesSectionProps) {
   const updateMut = useUpdateNote();
   const deleteMut = useDeleteNote();
 
-  // Auto-select first note
   useEffect(() => {
     if (!notes.length) {
       setSelectedId("");
+      setDraftNoteId("");
       return;
     }
-    if (!selectedId || !notes.some((n) => n.id === selectedId)) {
-      setSelectedId(notes[0].id);
+
+    if (selectedId && !notes.some((n) => n.id === selectedId)) {
+      setSelectedId("");
+      setDraftNoteId("");
     }
   }, [notes, selectedId]);
 
   const selected: NoteItem | null =
     notes.find((n) => n.id === selectedId) ?? null;
 
-  // When selection changes, load draft
-  useEffect(() => {
-    if (!selected) return;
-
-    const next = {
-      title: selected.title ?? "",
-      contentHtml: selected.contentHtml ?? "",
-      tags: selected.tags ?? [],
+  function draftFromNote(note: NoteItem): NoteDraft {
+    return {
+      title: note.title ?? "",
+      contentHtml: note.contentHtml ?? "",
+      tags: note.tags ?? [],
     };
+  }
 
-    setDraft(next);
-    setBaseline(next);
-    setSaveState("idle");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id]);
-
-  function sameDraftToBaseline(
-    draft: { title: string; contentHtml: string; tags: string[] },
-    baseline: { title: string; contentHtml: string; tags: string[] },
-  ) {
+  function sameDraftToBaseline(d: NoteDraft, b: NoteDraft) {
     return (
-      draft.title === baseline.title &&
-      draft.contentHtml === baseline.contentHtml &&
-      sameTags(draft.tags, baseline.tags)
+      d.title === b.title &&
+      d.contentHtml === b.contentHtml &&
+      sameTags(d.tags, b.tags)
     );
   }
 
   const baselineRef = useRef(baseline);
+
   useEffect(() => {
     baselineRef.current = baseline;
   }, [baseline]);
+
   const normalizeHtml = (html: string) => html.replace(/\s+/g, " ").trim();
 
-  // Mark dirty when draft changes
+  // Load draft when selected note changes, but only if draft is not already prepared for it
+  useEffect(() => {
+    if (!selected) {
+      setDraftNoteId("");
+      return;
+    }
+
+    if (draftNoteId === selected.id) return;
+
+    const next = draftFromNote(selected);
+    setDraft(next);
+    setBaseline(next);
+    setSaveState("idle");
+    setTagInput("");
+    setDraftNoteId(selected.id);
+  }, [selected, draftNoteId]);
+
+  // Dirty state only for the correct note-draft pair
   useEffect(() => {
     if (!selected || trashed) return;
-    const base = baselineRef.current;
+    if (draftNoteId !== selected.id) return;
 
+    const base = baselineRef.current;
     const isSame = sameDraftToBaseline(draft, base);
 
     if (!isSame) {
@@ -133,19 +144,19 @@ export function NotesSection({ trashed }: NotesSectionProps) {
     } else {
       if (saveState === "dirty") setSaveState("idle");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, selected?.id, trashed, saveState]);
+  }, [draft, selected, draftNoteId, trashed, saveState]);
 
   const debouncedDraft = useDebounceValue(
-    { noteId: selectedId, ...draft },
+    { noteId: draftNoteId, ...draft },
     800,
   );
 
-  // Autosave
+  // Autosave only when draft actually belongs to current selected note
   useEffect(() => {
     if (!selected || trashed) return;
     if (!debouncedDraft.noteId) return;
     if (debouncedDraft.noteId !== selected.id) return;
+    if (draftNoteId !== selected.id) return;
 
     const base = baselineRef.current;
 
@@ -164,6 +175,7 @@ export function NotesSection({ trashed }: NotesSectionProps) {
     ) {
       return;
     }
+
     if (updateMut.isPending) return;
 
     setSaveState("saving");
@@ -194,8 +206,7 @@ export function NotesSection({ trashed }: NotesSectionProps) {
         },
       },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedDraft, selected?.id, trashed]);
+  }, [debouncedDraft, selected, draftNoteId, trashed, updateMut]);
 
   const createNote = () => {
     createMut.mutate(
@@ -204,6 +215,18 @@ export function NotesSection({ trashed }: NotesSectionProps) {
         onSuccess: (created) => {
           toast.success("Note created");
           setQ("");
+
+          const next: NoteDraft = {
+            title: created.title ?? "",
+            contentHtml: created.contentHtml ?? "",
+            tags: created.tags ?? [],
+          };
+
+          setDraft(next);
+          setBaseline(next);
+          setSaveState("idle");
+          setTagInput("");
+          setDraftNoteId(created.id);
           setSelectedId(created.id);
         },
         onError: (e: unknown) => {
@@ -212,6 +235,29 @@ export function NotesSection({ trashed }: NotesSectionProps) {
         },
       },
     );
+  };
+
+  const openNote = (id: string) => {
+    const note = notes.find((n) => n.id === id);
+
+    if (!note) {
+      setSelectedId(id);
+      return;
+    }
+
+    const next = draftFromNote(note);
+
+    setDraft(next);
+    setBaseline(next);
+    setSaveState("idle");
+    setTagInput("");
+    setDraftNoteId(id);
+    setSelectedId(id);
+  };
+
+  const closeEditor = () => {
+    setSelectedId("");
+    setDraftNoteId("");
   };
 
   const moveToTrash = () => {
@@ -223,6 +269,7 @@ export function NotesSection({ trashed }: NotesSectionProps) {
         onSuccess: () => {
           toast.success("Moved to Trash");
           setSelectedId("");
+          setDraftNoteId("");
         },
         onError: (e: unknown) => {
           const err = e as { response?: { data?: { detail?: string } } };
@@ -241,6 +288,7 @@ export function NotesSection({ trashed }: NotesSectionProps) {
         onSuccess: () => {
           toast.success("Restored");
           setSelectedId("");
+          setDraftNoteId("");
         },
         onError: (e: unknown) => {
           const err = e as { response?: { data?: { detail?: string } } };
@@ -257,6 +305,7 @@ export function NotesSection({ trashed }: NotesSectionProps) {
       onSuccess: () => {
         toast.success("Deleted forever");
         setSelectedId("");
+        setDraftNoteId("");
       },
       onError: (e: unknown) => {
         const err = e as { response?: { data?: { detail?: string } } };
@@ -268,6 +317,7 @@ export function NotesSection({ trashed }: NotesSectionProps) {
   const addTag = () => {
     if (!selected) return;
     if (trashed) return;
+    if (draftNoteId !== selected.id) return;
 
     const t = tagInput.trim().replace(/^#/, "");
     if (!t) return;
@@ -282,27 +332,18 @@ export function NotesSection({ trashed }: NotesSectionProps) {
 
   const removeTag = (t: string) => {
     if (trashed) return;
+    if (!selected) return;
+    if (draftNoteId !== selected.id) return;
+
     setDraft((d) => ({ ...d, tags: d.tags.filter((x) => x !== t) }));
   };
 
-  return (
-    <>
-      <NotesListPanel
-        q={q}
-        onQChange={setQ}
-        trashed={trashed}
-        isNotesOrTrash={isNotesOrTrash}
-        notes={notes}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        isLoading={isLoading}
-        isError={isError}
-        error={error}
-        onCreate={createNote}
-        createPending={createMut.isPending}
-      />
+  const isDraftReady = !!selected && draftNoteId === selected.id;
 
+  return selected ? (
+    isDraftReady ? (
       <NotesEditorPanel
+        key={selected.id}
         isNotesOrTrash={isNotesOrTrash}
         trashed={trashed}
         selected={selected}
@@ -318,7 +359,27 @@ export function NotesSection({ trashed }: NotesSectionProps) {
         onRemoveTag={removeTag}
         updatePending={updateMut.isPending}
         deletePending={deleteMut.isPending}
+        onBack={closeEditor}
       />
-    </>
+    ) : (
+      <section className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 h-full min-h-0 flex items-center justify-center text-white/60">
+        <OrbitLoader />
+      </section>
+    )
+  ) : (
+    <NotesListPanel
+      q={q}
+      onQChange={setQ}
+      trashed={trashed}
+      isNotesOrTrash={isNotesOrTrash}
+      notes={notes}
+      selectedId={selectedId}
+      onSelect={openNote}
+      isLoading={isLoading}
+      isError={isError}
+      error={error}
+      onCreate={createNote}
+      createPending={createMut.isPending}
+    />
   );
 }
