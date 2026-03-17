@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     REDIS_URL: str | None = os.getenv("REDIS_URL")
+    TWILIO_ACCOUNT_SID: str | None = os.getenv("TWILIO_ACCOUNT_SID")
+    TWILIO_AUTH_TOKEN: str | None = os.getenv("TWILIO_AUTH_TOKEN")
+    TWILIO_VERIFY_SERVICE_SID: str | None = os.getenv("TWILIO_VERIFY_SERVICE_SID")
+    TOTP_ENCRYPTION_KEY: str | None = os.getenv("TOTP_ENCRYPTION_KEY")
+    TOTP_ISSUER_NAME: str | None = os.getenv("TOTP_ISSUER_NAME")
 
     @model_validator(mode="after")
     def validate_env(self):

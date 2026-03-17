@@ -6,8 +6,8 @@ from app.deps.auth_deps import get_current_user_email
 from app.schemas.passlock_schema import VaultSetupRequest, VaultMetaOut, VaultMetaPatch
 from pymongo import ReturnDocument
 
-
 router = APIRouter(prefix="/api/passlock", tags=["PassLock"])
+
 
 def get_db(request: Request):
     db = getattr(request.app.state, "db", None)
@@ -32,11 +32,9 @@ def to_meta_out(doc) -> VaultMetaOut:
 
 @router.get("/meta", response_model=VaultMetaOut)
 async def get_vault_meta(
-    request: Request,
+    email: str = Depends(get_current_user_email),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
-
     doc = await db.vault_meta.find_one({"userEmail": email})
     if not doc:
         raise HTTPException(status_code=404, detail="Vault not initialized")
@@ -47,10 +45,9 @@ async def get_vault_meta(
 @router.post("/setup", response_model=VaultMetaOut)
 async def setup_vault(
     payload: VaultSetupRequest,
-    request: Request,
+    email: str = Depends(get_current_user_email),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
     now = datetime.now(timezone.utc)
 
     existing = await db.vault_meta.find_one({"userEmail": email})
@@ -75,45 +72,13 @@ async def setup_vault(
 
     return to_meta_out(doc)
 
-# @router.post("/rotate-vault-key", response_model=VaultMetaOut)
-# async def rotate_vault_key(
-#     payload: VaultSetupRequest,
-#     request: Request,
-#     db=Depends(get_db),
-# ):
-#     email = get_current_user_email(request)
-#     now = datetime.now(timezone.utc)
 
-#     res = await db.vault_meta.find_one_and_update(
-#         {"userEmail": email},
-#         {
-#             "$set": {
-#                 "kdf": payload.kdf,
-#                 "kdfParams": payload.kdfParams.model_dump(),
-#                 "salt": payload.salt,
-#                 "encryptedVaultKey": payload.encryptedVaultKey,
-#                 "vaultKeyIv": payload.vaultKeyIv,
-#                 "vaultKeyAlg": payload.vaultKeyAlg or "A256GCM",
-#                 "version": payload.version or 1,
-#                 "updatedAt": now,
-#             }
-#         },
-#         return_document=ReturnDocument.AFTER
-#     )
-
-#     if not res:
-#         raise HTTPException(status_code=404, detail="Vault not initialized")
-
-#     logger.info(f"[PASSLOCK] vault key rotated user={email}")
-#     return to_meta_out(res)
-
-@router.patch("/meta")
+@router.patch("/meta", response_model=VaultMetaOut)
 async def patch_vault_meta(
     payload: VaultMetaPatch,
-    request: Request,
+    email: str = Depends(get_current_user_email),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
     now = datetime.now(timezone.utc)
 
     existing = await db.vault_meta.find_one({"userEmail": email})
@@ -134,7 +99,7 @@ async def patch_vault_meta(
         "updatedAt": now,
     }
 
-    doc = await db.passlock_meta.find_one_and_update(
+    doc = await db.vault_meta.find_one_and_update(
         {"userEmail": email},
         {"$set": update},
         return_document=ReturnDocument.AFTER,

@@ -14,16 +14,40 @@ export type SignupPayload = {
 
 export type User = {
   id: string;
-  email: string;
+  email: string | null;
   name?: string | null;
   role?: "user" | "admin" | "operator";
   avatarUrl?: string | null;
+
+  mobileNumber?: string | null;
+  isEmailVerified?: boolean;
+  isMobileVerified?: boolean;
+  mfaEnabled?: boolean;
 };
 
 export type AuthResponse = {
   message: string;
-  user: User;
+  requiresMfa?: boolean;
+  email?: string;
+  user?: User;
   token?: string;
+};
+
+export type MobileOtpRequestPayload = {
+  mobileNumber: string;
+};
+
+export type MobileOtpVerifyPayload = {
+  mobileNumber: string;
+  otpCode: string;
+};
+
+export type MfaVerifyPayload = {
+  code: string;
+};
+
+export type BasicMessageResponse = {
+  message: string;
 };
 
 export type UploadAvatarResponse = {
@@ -50,6 +74,8 @@ export type ChangePasswordPayload = {
 export type ChangePasswordResponse = {
   message: string;
 };
+
+export type LinkMobileVerifyResponse = User;
 
 export const authService = {
   // POST: /auth/login
@@ -96,11 +122,51 @@ export const authService = {
     return res.data;
   },
 
-  //PATCH /auth/me/password
+  //PATCH: /auth/me/password
   changePassword: async (
     payload: ChangePasswordPayload,
   ): Promise<ChangePasswordResponse> => {
     const res = await api.patch("/auth/me/password", payload);
+    return res.data;
+  },
+
+  // POST: /auth/mobile/request-otp
+  requestMobileOtp: async (
+    payload: MobileOtpRequestPayload,
+  ): Promise<BasicMessageResponse> => {
+    const res = await api.post("/auth/mobile/request-otp", payload);
+    return res.data;
+  },
+
+  // POST: /auth/mobile/verify-otp
+  verifyMobileOtp: async (
+    payload: MobileOtpVerifyPayload,
+  ): Promise<AuthResponse> => {
+    const res = await api.post("/auth/mobile/verify-otp", payload);
+    return res.data;
+  },
+
+  // POST: /auth/mfa/verify
+  verifyMfa: async (
+    payload: MfaVerifyPayload,
+  ): Promise<BasicMessageResponse> => {
+    const res = await api.post("/auth/mfa/verify", payload);
+    return res.data;
+  },
+
+  // POST: /auth/me/mobile/request-otp
+  requestLinkMobileOtp: async (
+    payload: MobileOtpRequestPayload,
+  ): Promise<BasicMessageResponse> => {
+    const res = await api.post("/auth/me/mobile/request-otp", payload);
+    return res.data;
+  },
+
+  // POST: /auth/me/mobile/verify-otp
+  verifyLinkMobileOtp: async (
+    payload: MobileOtpVerifyPayload,
+  ): Promise<LinkMobileVerifyResponse> => {
+    const res = await api.post("/auth/me/mobile/verify-otp", payload);
     return res.data;
   },
 };

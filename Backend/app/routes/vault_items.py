@@ -15,6 +15,7 @@ from app.core.logger import logger
 
 router = APIRouter(prefix="/api/passlock/items", tags=["PassLock Items"])
 
+
 def get_db(request: Request):
     db = getattr(request.app.state, "db", None)
     if db is None:
@@ -42,10 +43,9 @@ def to_out(doc) -> VaultItemOut:
 @router.post("", response_model=VaultItemOut)
 async def create_item(
     payload: VaultItemCreate,
-    request: Request,
+    email: str = Depends(get_current_user_email),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
     now = datetime.now(timezone.utc)
 
     doc = {
@@ -72,13 +72,11 @@ async def create_item(
 
 @router.get("", response_model=List[VaultItemOut])
 async def list_items(
-    request: Request,
+    email: str = Depends(get_current_user_email),
     db=Depends(get_db),
     folder: Optional[str] = Query(None),
     favorite: Optional[bool] = Query(None),
 ):
-    email = get_current_user_email(request)
-
     filt = {"userEmail": email}
 
     if folder is not None:
@@ -87,11 +85,7 @@ async def list_items(
     if favorite is not None:
         filt["favorite"] = favorite
 
-    cursor = (
-        db.vault_items.find(filt)
-        .sort([("favorite", -1), ("updatedAt", -1)])
-    )
-
+    cursor = db.vault_items.find(filt).sort([("favorite", -1), ("updatedAt", -1)])
     items = await cursor.to_list(length=500)
 
     logger.info(f"[PASSLOCK] list items user={email} count={len(items)}")
@@ -103,19 +97,15 @@ async def list_items(
 @router.get("/{item_id}", response_model=VaultItemOut)
 async def get_item(
     item_id: str,
-    request: Request,
+    email: str = Depends(get_current_user_email),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
-
     try:
         oid = ObjectId(item_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid item id")
 
-    doc = await db.vault_items.find_one(
-        {"_id": oid, "userEmail": email}
-    )
+    doc = await db.vault_items.find_one({"_id": oid, "userEmail": email})
 
     if not doc:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -129,11 +119,9 @@ async def get_item(
 async def update_item(
     item_id: str,
     payload: VaultItemUpdate,
-    request: Request,
+    email: str = Depends(get_current_user_email),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
-
     try:
         oid = ObjectId(item_id)
     except Exception:
@@ -170,7 +158,7 @@ async def update_item(
     doc = await db.vault_items.find_one_and_update(
         {"_id": oid, "userEmail": email},
         {"$set": update},
-        return_document=ReturnDocument.AFTER
+        return_document=ReturnDocument.AFTER,
     )
 
     if not doc:
@@ -185,19 +173,15 @@ async def update_item(
 @router.delete("/{item_id}")
 async def delete_item(
     item_id: str,
-    request: Request,
+    email: str = Depends(get_current_user_email),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
-
     try:
         oid = ObjectId(item_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid item id")
 
-    res = await db.vault_items.delete_one(
-        {"_id": oid, "userEmail": email}
-    )
+    res = await db.vault_items.delete_one({"_id": oid, "userEmail": email})
 
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")
