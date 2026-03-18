@@ -19,3 +19,28 @@ export const useCurrentUser = () =>
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
+
+export const useRequestMobileOtp = () =>
+  useMutation({
+    mutationFn: authService.requestMobileOtp,
+  });
+
+export const useVerifyMobileOtp = () =>
+  useMutation({
+    mutationFn: authService.verifyMobileOtp,
+  });
+
+export const useVerifyMfa = () =>
+  useMutation({
+    mutationFn: authService.verifyMfa,
+  });
+
+export const useRequestLinkMobileOtp = () =>
+  useMutation({
+    mutationFn: authService.requestLinkMobileOtp,
+  });
+
+export const useVerifyLinkMobileOtp = () =>
+  useMutation({
+    mutationFn: authService.verifyLinkMobileOtp,
+  });

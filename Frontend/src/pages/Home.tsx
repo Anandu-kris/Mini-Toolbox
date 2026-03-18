@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import FeatureCard from "@/components/FeatureCard";
-import { LinkIcon, KeyRound, Notebook, Timer, LockKeyhole, Gamepad } from "lucide-react";
+import { LinkIcon, KeyRound, Notebook, Timer, LockKeyhole, Gamepad, ReceiptIndianRupee } from "lucide-react";
 import TextType from "@/components/Animation/TextType";
 
 export default function Home() {
@@ -71,6 +71,13 @@ export default function Home() {
           icon={<Gamepad className="h-6 w-6" />}
           variant="rose"
           onClick={() => navigate("/home/wordle")}
+        />
+        <FeatureCard
+          title="Finance Manager"
+          description="Manages and monitors the Expenses."
+          icon={<ReceiptIndianRupee className="h-6 w-6" />}
+          variant="indigo"
+          onClick={() => navigate("/home/finance")}
         />
       </div>
     </div>

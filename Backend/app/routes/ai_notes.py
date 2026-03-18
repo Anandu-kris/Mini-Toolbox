@@ -8,13 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.config import settings
 from app.deps.ai_deps import rl_dep, log_ai_event, Timer
-from app.deps.auth_deps import get_current_user_email
+from app.deps.auth_deps import get_current_user
 from app.services.ai_notes import vector_search_chunks, build_prompt_context
 from app.schemas.ai_notes_schema import (
     NotesCopilotRequest,
     NotesCopilotResponse,
     NoteActionResponse,
 )
+from app.config import settings
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
 
@@ -26,15 +27,6 @@ def get_db(request: Request):
     return db
 
 
-# -------------------------
-# Basic limits
-# -------------------------
-MAX_QUERY_CHARS = 500
-MAX_NOTE_CHARS = 12000
-COPILOT_TOP_K = 6
-COPILOT_TOP_K_MAX = 10
-
-
 def clamp_text(s: str, max_chars: int) -> str:
     s = (s or "").strip()
     if len(s) <= max_chars:
@@ -43,7 +35,7 @@ def clamp_text(s: str, max_chars: int) -> str:
 
 
 async def openai_chat(*, system: str, user: str) -> str:
-    url = "https://api.openai.com/v1/chat/completions"
+    url = settings.OPENAI_CHAT_URL
     headers = {"Authorization": f"Bearer {settings.OPENAI_API_KEY}"}
     body = {
         "model": settings.OPENAI_CHAT_MODEL,
@@ -63,13 +55,13 @@ async def openai_chat(*, system: str, user: str) -> str:
     return data["choices"][0]["message"]["content"]
 
 
-async def get_note_or_404(db, *, email: str, note_id: str) -> Dict[str, Any]:
+async def get_note_or_404(db, *, user_id: ObjectId, note_id: str) -> Dict[str, Any]:
     try:
         oid = ObjectId(note_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid note id")
 
-    doc = await db.notes.find_one({"_id": oid, "userEmail": email})
+    doc = await db.notes.find_one({"_id": oid, "userId": user_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Note not found")
 
@@ -78,31 +70,33 @@ async def get_note_or_404(db, *, email: str, note_id: str) -> Dict[str, Any]:
 
     return doc
 
-# -------------------------
-# Endpoints
-# -------------------------
 
 @router.post(
     "/notes",
     response_model=NotesCopilotResponse,
-    dependencies=[Depends(rl_dep("copilot", 20, 60))], 
+    dependencies=[Depends(rl_dep("copilot", 20, 60))],
 )
 async def notes_copilot(
     payload: NotesCopilotRequest,
     db=Depends(get_db),
-    user_email: str = Depends(get_current_user_email),
+    current_user: dict = Depends(get_current_user),
 ):
     t = Timer()
+    user_id = current_user["_id"]
     q = (payload.query or "").strip()
+
     if not q:
         raise HTTPException(status_code=400, detail="Query required")
 
-    top_k = min(max(int(payload.top_k or COPILOT_TOP_K), 1), COPILOT_TOP_K_MAX)
+    if len(q) > settings.MAX_QUERY_CHARS:
+        raise HTTPException(status_code=400, detail="Query too long")
+
+    top_k = min(max(int(payload.top_k or settings.COPILOT_TOP_K), 1), settings.COPILOT_TOP_K_MAX)
 
     try:
         chunks = await vector_search_chunks(
             db,
-            user_email=user_email,
+            user_id=user_id,
             query=q,
             api_key=settings.OPENAI_API_KEY,
             embed_model=settings.OPENAI_EMBED_MODEL,
@@ -123,7 +117,7 @@ async def notes_copilot(
 
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="copilot",
             ok=True,
             latency_ms=t.ms(),
@@ -134,7 +128,7 @@ async def notes_copilot(
     except HTTPException as e:
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="copilot",
             ok=False,
             latency_ms=t.ms(),
@@ -145,7 +139,7 @@ async def notes_copilot(
     except Exception as e:
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="copilot",
             ok=False,
             latency_ms=t.ms(),
@@ -158,19 +152,21 @@ async def notes_copilot(
 @router.post(
     "/notes/{note_id}/summarize",
     response_model=NoteActionResponse,
-    dependencies=[Depends(rl_dep("summarize", 30, 60))],  
+    dependencies=[Depends(rl_dep("summarize", 30, 60))],
 )
 async def summarize_note(
     note_id: str,
     db=Depends(get_db),
-    user_email: str = Depends(get_current_user_email),
+    current_user: dict = Depends(get_current_user),
 ):
     t = Timer()
+    user_id = current_user["_id"]
+
     try:
-        note = await get_note_or_404(db, email=user_email, note_id=note_id)
+        note = await get_note_or_404(db, user_id=user_id, note_id=note_id)
         title = (note.get("title") or "").strip()
         raw_text = note.get("contentText") or ""
-        text = clamp_text(raw_text, MAX_NOTE_CHARS)
+        text = clamp_text(raw_text, settings.MAX_NOTE_CHARS)
 
         system = (
             "You summarize user notes.\n"
@@ -184,7 +180,7 @@ async def summarize_note(
 
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="summarize",
             note_id=note_id,
             ok=True,
@@ -196,7 +192,7 @@ async def summarize_note(
     except HTTPException as e:
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="summarize",
             note_id=note_id,
             ok=False,
@@ -207,7 +203,7 @@ async def summarize_note(
     except Exception as e:
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="summarize",
             note_id=note_id,
             ok=False,
@@ -220,19 +216,21 @@ async def summarize_note(
 @router.post(
     "/notes/{note_id}/shorten",
     response_model=NoteActionResponse,
-    dependencies=[Depends(rl_dep("shorten", 30, 60))], 
+    dependencies=[Depends(rl_dep("shorten", 30, 60))],
 )
 async def shorten_note(
     note_id: str,
     db=Depends(get_db),
-    user_email: str = Depends(get_current_user_email),
+    current_user: dict = Depends(get_current_user),
 ):
     t = Timer()
+    user_id = current_user["_id"]
+
     try:
-        note = await get_note_or_404(db, email=user_email, note_id=note_id)
+        note = await get_note_or_404(db, user_id=user_id, note_id=note_id)
         title = (note.get("title") or "").strip()
         raw_text = note.get("contentText") or ""
-        text = clamp_text(raw_text, MAX_NOTE_CHARS)
+        text = clamp_text(raw_text, settings.MAX_NOTE_CHARS)
 
         system = (
             "You rewrite notes to be shorter while preserving meaning.\n"
@@ -247,7 +245,7 @@ async def shorten_note(
 
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="shorten",
             note_id=note_id,
             ok=True,
@@ -259,7 +257,7 @@ async def shorten_note(
     except HTTPException as e:
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="shorten",
             note_id=note_id,
             ok=False,
@@ -270,7 +268,7 @@ async def shorten_note(
     except Exception as e:
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="shorten",
             note_id=note_id,
             ok=False,
@@ -288,14 +286,16 @@ async def shorten_note(
 async def highlight_note(
     note_id: str,
     db=Depends(get_db),
-    user_email: str = Depends(get_current_user_email),
+    current_user: dict = Depends(get_current_user),
 ):
     t = Timer()
+    user_id = current_user["_id"]
+
     try:
-        note = await get_note_or_404(db, email=user_email, note_id=note_id)
+        note = await get_note_or_404(db, user_id=user_id, note_id=note_id)
         title = (note.get("title") or "").strip()
         raw_text = note.get("contentText") or ""
-        text = clamp_text(raw_text, MAX_NOTE_CHARS)
+        text = clamp_text(raw_text, settings.MAX_NOTE_CHARS)
 
         system = (
             "You extract highlights from notes.\n"
@@ -312,7 +312,7 @@ async def highlight_note(
 
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="highlights",
             note_id=note_id,
             ok=True,
@@ -324,7 +324,7 @@ async def highlight_note(
     except HTTPException as e:
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="highlights",
             note_id=note_id,
             ok=False,
@@ -335,7 +335,7 @@ async def highlight_note(
     except Exception as e:
         await log_ai_event(
             db,
-            user_email=user_email,
+            user_id=str(user_id),
             action="highlights",
             note_id=note_id,
             ok=False,

@@ -16,7 +16,6 @@ type Props = {
   onAdd: (title: string) => void;
   onSetActive: (id: string) => void;
   onDelete: (id: string) => void;
-  /** The accent color from the current mode theme, e.g. "#3b82f6" */
   accentColor?: string;
 };
 
@@ -31,7 +30,7 @@ export default function PomodoroTasks({
   accentColor = "#3b82f6",
 }: Props) {
   const [draft, setDraft] = useState("");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const isLocked = running && mode === "focus";
   const activeTask = tasks.find((t) => t.id === activeTaskId);
 
@@ -231,7 +230,7 @@ export default function PomodoroTasks({
           "--pt-accent-28":   `${accentColor}47`,
           "--pt-accent-35":   `${accentColor}59`,
           "--pt-accent-40":   `${accentColor}66`,
-          "--pt-accent-40b":  `${accentColor}1a`,  // badge bg
+          "--pt-accent-40b":  `${accentColor}1a`,  
         } as React.CSSProperties}
       >
         {/* ── Accordion header ── */}
@@ -342,7 +341,6 @@ export default function PomodoroTasks({
                 })
               )}
             </div>
-
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 from __future__ import annotations
+
 from pymongo import ReturnDocument
-from datetime import datetime as dt, timedelta,timezone
+from datetime import datetime as dt, timedelta, timezone
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,15 +13,17 @@ from app.schemas.wordle_schema import (
     WordleStatsResponse,
     WordleFinishRequest,
 )
-from app.deps.auth_deps import get_current_user_email
+from app.deps.auth_deps import get_current_user
 from app.services.wordle_service import (
     utc_day_id,
     get_or_create_daily_answer,
     is_allowed_guess,
     evaluate_guess,
 )
+from app.config import settings
 
 router = APIRouter(prefix="/api/wordle", tags=["Wordle"])
+
 
 def get_db(request: Request):
     db = getattr(request.app.state, "db", None)
@@ -28,43 +31,51 @@ def get_db(request: Request):
         raise HTTPException(status_code=503, detail="DB not ready")
     return db
 
-WORD_LEN = 5
-MAX_ATTEMPTS = 6
 
+# Daily Game
 @router.get("/daily", response_model=WordleDailyResponse)
 async def get_daily():
-    return WordleDailyResponse(dayId=utc_day_id(), length=WORD_LEN, maxAttempts=MAX_ATTEMPTS)
+    return WordleDailyResponse(
+        dayId=utc_day_id(),
+        length=settings.WORDLE_WORD_LENGTH,
+        maxAttempts=settings.WORDLE_MAX_ATTEMPTS,
+    )
 
+# Guess Call
 @router.post("/guess", response_model=WordleGuessResponse)
-async def submit_guess(payload: WordleGuessRequest, request: Request, db=Depends(get_db)):
-    email = get_current_user_email(request)
+async def submit_guess(
+    payload: WordleGuessRequest,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    user_id = current_user["_id"]
+    user_email = current_user.get("userEmail") or current_user.get("email")
 
     day_id = payload.dayId.strip()
     guess = payload.guess.strip().lower()
 
-    if len(guess) != WORD_LEN or not guess.isalpha():
+    if len(guess) != settings.WORDLE_WORD_LENGTH or not guess.isalpha():
         raise HTTPException(status_code=400, detail="Guess must be 5 letters")
 
     if day_id != utc_day_id():
         raise HTTPException(status_code=400, detail="Invalid dayId")
 
-    allowed = await is_allowed_guess(db, guess, length=WORD_LEN)
+    allowed = await is_allowed_guess(db, guess, length=settings.WORDLE_WORD_LENGTH)
     if not allowed:
         raise HTTPException(status_code=400, detail="Not in word list")
 
-    game = await db.wordle_games.find_one({"userEmail": email, "dayId": day_id})
+    game = await db.wordle_games.find_one({"userId": user_id, "dayId": day_id})
     if game and game.get("status") in ("won", "lost"):
         raise HTTPException(status_code=400, detail="Game already finished")
 
     guesses = (game or {}).get("guesses", [])
-    if len(guesses) >= MAX_ATTEMPTS:
+    if len(guesses) >= settings.WORDLE_MAX_ATTEMPTS:
         raise HTTPException(status_code=400, detail="No attempts left")
 
     if guess in guesses:
         raise HTTPException(status_code=400, detail="Already guessed")
 
-    answer = await get_or_create_daily_answer(db, day_id, length=WORD_LEN)
-
+    answer = await get_or_create_daily_answer(db, day_id, length=settings.WORDLE_WORD_LENGTH)
     evaluation = evaluate_guess(answer, guess)
 
     guesses.append(guess)
@@ -73,16 +84,24 @@ async def submit_guess(payload: WordleGuessRequest, request: Request, db=Depends
     status = "playing"
     if guess == answer:
         status = "won"
-    elif attempts_used >= MAX_ATTEMPTS:
+    elif attempts_used >= settings.WORDLE_MAX_ATTEMPTS:
         status = "lost"
 
     now = dt.now(timezone.utc)
 
     await db.wordle_games.update_one(
-        {"userEmail": email, "dayId": day_id},
+        {"userId": user_id, "dayId": day_id},
         {
-            "$set": {"status": status, "attempts": attempts_used, "updatedAt": now},
-            "$setOnInsert": {"createdAt": now},
+            "$set": {
+                "userId": user_id,
+                "status": status,
+                "attempts": attempts_used,
+                "updatedAt": now,
+            },
+            "$setOnInsert": {
+                "createdAt": now,
+                "countedStats": False,
+            },
             "$push": {"guesses": guess},
         },
         upsert=True,
@@ -96,14 +115,21 @@ async def submit_guess(payload: WordleGuessRequest, request: Request, db=Depends
         status=status,
     )
 
+# Game Stats
 @router.get("/stats", response_model=WordleStatsResponse)
-async def get_stats(request: Request, db=Depends(get_db)):
-    email = get_current_user_email(request)
-    doc = await db.wordle_stats.find_one({"userEmail": email})
+async def get_stats(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    user_id = current_user["_id"]
+
+    doc = await db.wordle_stats.find_one({"userId": user_id})
     if not doc:
         return WordleStatsResponse()
+
     dist: Dict[str, int] = {str(i): 0 for i in range(1, 7)}
     dist.update(doc.get("distribution") or {})
+
     return WordleStatsResponse(
         played=doc.get("played", 0),
         wins=doc.get("wins", 0),
@@ -113,35 +139,39 @@ async def get_stats(request: Request, db=Depends(get_db)):
         lastPlayedDayId=doc.get("lastPlayedDayId"),
     )
 
+# Game End
 @router.post("/finish", response_model=WordleStatsResponse)
-async def finish_game(payload: WordleFinishRequest, request: Request, db=Depends(get_db)):
-
-    email = get_current_user_email(request)
+async def finish_game(
+    payload: WordleFinishRequest,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    user_id = current_user["_id"]
+    user_email = current_user.get("userEmail") or current_user.get("email")
     day_id = payload.dayId.strip()
 
     if day_id != utc_day_id():
         raise HTTPException(status_code=400, detail="Invalid dayId")
 
-    game = await db.wordle_games.find_one({"userEmail": email, "dayId": day_id})
+    game = await db.wordle_games.find_one({"userId": user_id, "dayId": day_id})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
     if game.get("status") != payload.status:
         raise HTTPException(status_code=400, detail="Status mismatch")
-    
+
     now = dt.now(timezone.utc)
 
     claimed = await db.wordle_games.find_one_and_update(
-        {"userEmail": email, "dayId": day_id, "countedStats": {"$ne": True}},
+        {"userId": user_id, "dayId": day_id, "countedStats": {"$ne": True}},
         {"$set": {"countedStats": True, "updatedAt": now}},
         return_document=ReturnDocument.AFTER,
     )
 
     if not claimed:
-        return await get_stats(request, db)
+        return await get_stats(current_user=current_user, db=db)
 
-
-    stats = await db.wordle_stats.find_one({"userEmail": email}) or {}
+    stats = await db.wordle_stats.find_one({"userId": user_id}) or {}
     played = int(stats.get("played", 0))
     wins = int(stats.get("wins", 0))
     current = int(stats.get("currentStreak", 0))
@@ -155,6 +185,7 @@ async def finish_game(payload: WordleFinishRequest, request: Request, db=Depends
     if payload.status == "won":
         if payload.attemptsUsed < 1 or payload.attemptsUsed > 6:
             raise HTTPException(status_code=400, detail="Invalid attemptsUsed")
+
         if last_day:
             try:
                 y = parse_day(day_id) - timedelta(days=1)
@@ -166,6 +197,7 @@ async def finish_game(payload: WordleFinishRequest, request: Request, db=Depends
                 current = 1
         else:
             current = 1
+
         wins += 1
         dist[str(payload.attemptsUsed)] = int(dist.get(str(payload.attemptsUsed), 0)) + 1
     else:
@@ -175,9 +207,10 @@ async def finish_game(payload: WordleFinishRequest, request: Request, db=Depends
     maxs = max(maxs, current)
 
     await db.wordle_stats.update_one(
-        {"userEmail": email},
+        {"userId": user_id},
         {
             "$set": {
+                "userId": user_id,
                 "played": played,
                 "wins": wins,
                 "currentStreak": current,
@@ -185,13 +218,16 @@ async def finish_game(payload: WordleFinishRequest, request: Request, db=Depends
                 "distribution": dist,
                 "lastPlayedDayId": day_id,
                 "updatedAt": now,
-            }
+            },
+            "$setOnInsert": {
+                "createdAt": now,
+            },
         },
         upsert=True,
     )
 
     await db.wordle_games.update_one(
-        {"userEmail": email, "dayId": day_id},
+        {"userId": user_id, "dayId": day_id},
         {"$set": {"countedStats": True, "updatedAt": now}},
     )
 

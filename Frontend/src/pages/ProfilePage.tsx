@@ -8,20 +8,34 @@ import {
   X,
   Save,
   KeyRound,
+  Smartphone,
+  ShieldCheck,
 } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useUploadAvatar } from "@/hooks/useUploadAvatar";
 import { useUpdateProfile } from "@/hooks/useUpdateProfile";
 import { useChangePassword } from "@/hooks/useChangePassword";
 import axios from "axios";
+import {
+  useVerifyLinkMobileOtp,
+  useRequestLinkMobileOtp,
+} from "@/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
+import { maskMobileNumber } from "@/helper/MobileNumberMask";
 
 export default function ProfilePage() {
+  const queryClient = useQueryClient();
   const { data: me, isLoading, isError } = useCurrentUser();
   const { mutateAsync: uploadAvatar, isPending: uploading } = useUploadAvatar();
   const { mutateAsync: updateProfile, isPending: savingProfile } =
     useUpdateProfile();
   const { mutateAsync: changePassword, isPending: changingPwd } =
     useChangePassword();
+  const { mutateAsync: requestLinkMobileOtp, isPending: requestingMobileOtp } =
+    useRequestLinkMobileOtp();
+
+  const { mutateAsync: verifyLinkMobileOtp, isPending: verifyingMobileOtp } =
+    useVerifyLinkMobileOtp();
 
   const displayName = useMemo(() => {
     return me?.name ?? "Account";
@@ -30,6 +44,12 @@ export default function ProfilePage() {
   const displayEmail = useMemo(() => {
     return me?.email ?? "—";
   }, [me]);
+
+  const displayMobile = useMemo(() => {
+    return maskMobileNumber(me?.mobileNumber);
+  }, [me?.mobileNumber]);
+
+  const mobileBusy = requestingMobileOtp || verifyingMobileOtp;
 
   const initialAvatarUrl = useMemo(() => {
     return me?.avatarUrl ?? null;
@@ -49,6 +69,12 @@ export default function ProfilePage() {
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [pwdError, setPwdError] = useState<string | null>(null);
+
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileDraft, setMobileDraft] = useState("");
+  const [mobileOtp, setMobileOtp] = useState("");
+  const [mobileStep, setMobileStep] = useState<"input" | "verify">("input");
+  const [mobileError, setMobileError] = useState<string | null>(null);
 
   async function onSavePassword() {
     setPwdError(null);
@@ -170,6 +196,74 @@ export default function ProfilePage() {
   const profileChanged =
     nameDraft.trim() !== (me?.name ?? "") ||
     emailDraft.trim() !== (me?.email ?? "");
+
+  //Mobile OTP Request
+  async function onRequestMobileOtp() {
+    setMobileError(null);
+
+    const mobile = mobileDraft.trim();
+
+    if (mobile.length !== 10) {
+      setMobileError("Enter a valid 10-digit mobile number.");
+      return;
+    }
+
+    try {
+      await requestLinkMobileOtp({
+        mobileNumber: `+91${mobile}`,
+      });
+      setMobileStep("verify");
+    } catch (e: unknown) {
+      let msg = "Failed to send OTP";
+      if (axios.isAxiosError(e)) msg = e.response?.data?.detail ?? e.message;
+      setMobileError(msg);
+    }
+  }
+
+  //OTP Verify
+  async function onVerifyMobileOtp() {
+    setMobileError(null);
+
+    const mobile = mobileDraft.trim();
+    const otp = mobileOtp.trim();
+
+    if (mobile.length !== 10) {
+      setMobileError("Enter a valid mobile number.");
+      return;
+    }
+
+    if (!otp) {
+      setMobileError("Please enter the OTP.");
+      return;
+    }
+
+    try {
+      await verifyLinkMobileOtp({
+        mobileNumber: `+91${mobile}`,
+        otpCode: otp,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+
+      setMobileOpen(false);
+      setMobileStep("input");
+      setMobileDraft("");
+      setMobileOtp("");
+      setMobileError(null);
+    } catch (e: unknown) {
+      let msg = "OTP verification failed";
+      if (axios.isAxiosError(e)) msg = e.response?.data?.detail ?? e.message;
+      setMobileError(msg);
+    }
+  }
+
+  function onCancelMobileLink() {
+    setMobileOpen(false);
+    setMobileStep("input");
+    setMobileDraft("");
+    setMobileOtp("");
+    setMobileError(null);
+  }
 
   return (
     <>
@@ -431,6 +525,42 @@ export default function ProfilePage() {
           border-color: rgba(139,109,253,0.55);
           box-shadow: 0 0 0 3px rgba(139,109,253,0.12);
         }
+        .error{
+          margin-top: 12px;
+          font-size: 12px;
+          color: #ff7b7b;
+        }
+
+        .status-pill{
+          display:inline-flex;
+          align-items:center;
+          gap:6px;
+          padding: 6px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 600;
+          border: 1px solid rgba(255,255,255,0.08);
+          width: fit-content;
+        }
+
+        .status-pill.ok{
+          background: rgba(34,197,94,0.12);
+          color: rgba(134,239,172,0.95);
+          border-color: rgba(34,197,94,0.24);
+        }
+
+        .status-pill.warn{
+          background: rgba(245,158,11,0.10);
+          color: rgba(253,224,71,0.95);
+          border-color: rgba(245,158,11,0.22);
+        }
+
+        .inline-actions{
+          display:flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          align-items:center;
+        }
 
       `}</style>
 
@@ -628,6 +758,187 @@ export default function ProfilePage() {
                 </div>
               ) : null}
             </div>
+
+            <div className="panel">
+              <div className="panel-head">
+                <div className="panel-title">Mobile login</div>
+
+                {!mobileOpen ? (
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setMobileOpen(true);
+                      setMobileDraft(
+                        me?.mobileNumber?.replace("+91", "") ?? "",
+                      );
+                      setMobileOtp("");
+                      setMobileStep("input");
+                      setMobileError(null);
+                    }}
+                    disabled={busy}
+                  >
+                    <Smartphone size={16} />
+                    {me?.mobileNumber ? "Update mobile" : "Link mobile"}
+                  </button>
+                ) : (
+                  <div className="inline-actions">
+                    <button
+                      className="btn"
+                      onClick={onCancelMobileLink}
+                      disabled={mobileBusy}
+                    >
+                      <X size={16} />
+                      Cancel
+                    </button>
+
+                    {mobileStep === "input" ? (
+                      <button
+                        className="btn btn-primary"
+                        onClick={onRequestMobileOtp}
+                        disabled={mobileBusy}
+                      >
+                        {requestingMobileOtp ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Sending…
+                          </>
+                        ) : (
+                          <>
+                            <Save size={16} />
+                            Send OTP
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-primary"
+                        onClick={onVerifyMobileOtp}
+                        disabled={mobileBusy}
+                      >
+                        {verifyingMobileOtp ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Verifying…
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck size={16} />
+                            Verify OTP
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {!mobileOpen ? (
+                <>
+                  <div className="field">
+                    <div className="label">
+                      <Smartphone size={14} />
+                      Mobile number
+                    </div>
+                    <div className="value">{displayMobile}</div>
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    {me?.isMobileVerified ? (
+                      <div className="status-pill ok">
+                        <ShieldCheck size={12} />
+                        Verified
+                      </div>
+                    ) : (
+                      <div className="status-pill warn">
+                        <Smartphone size={12} />
+                        Not linked
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="hint" style={{ marginTop: 12 }}>
+                    {me?.isMobileVerified
+                      ? "Your mobile number is linked and can be used for OTP login."
+                      : "Link your mobile number to sign in with OTP later."}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="field">
+                    <div className="label">
+                      <Smartphone size={14} />
+                      Mobile number
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: "14px",
+                          border: "1px solid rgba(255,255,255,0.12)",
+                          background: "rgba(255,255,255,0.04)",
+                          color: "rgba(255,255,255,0.7)",
+                          fontSize: "13px",
+                        }}
+                      >
+                        +91
+                      </div>
+
+                      <input
+                        className="input"
+                        value={mobileDraft}
+                        onChange={(e) => {
+                          const digits = e.target.value
+                            .replace(/\D/g, "")
+                            .slice(0, 10);
+                          setMobileDraft(digits);
+                        }}
+                        placeholder="XXXXXXXXXX"
+                        disabled={mobileBusy || mobileStep === "verify"}
+                        style={{ flex: 1 }}
+                      />
+                    </div>
+                  </div>
+
+                  {mobileStep === "verify" ? (
+                    <div className="field">
+                      <div className="label">
+                        <ShieldCheck size={14} />
+                        OTP
+                      </div>
+                      <input
+                        className="input"
+                        value={mobileOtp}
+                        onChange={(e) =>
+                          setMobileOtp(
+                            e.target.value.replace(/\D/g, "").slice(0, 6),
+                          )
+                        }
+                        placeholder="Enter OTP"
+                        disabled={mobileBusy}
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="hint" style={{ marginTop: 12 }}>
+                    {mobileStep === "input"
+                      ? "We’ll send an OTP to this number to verify and link it to your current account."
+                      : "Enter the OTP sent to your mobile number to complete verification."}
+                  </div>
+
+                  {mobileError ? (
+                    <div className="error">{mobileError}</div>
+                  ) : null}
+                </>
+              )}
+            </div>
+
             <div className="panel">
               <div className="panel-head">
                 <div className="panel-title">Security</div>

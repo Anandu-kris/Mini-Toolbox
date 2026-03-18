@@ -59,7 +59,6 @@ export default function RichTextEditor({ value, onChange, disabled }: Props) {
     editorProps: {
       attributes: {
         class:
-          // IMPORTANT: fill container + allow scroll parent to work
           "ProseMirror h-full min-h-0 p-4 focus:outline-none " +
           "text-white/90 leading-6 " +
           "[&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-semibold " +

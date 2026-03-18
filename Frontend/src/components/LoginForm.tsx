@@ -1,11 +1,17 @@
 // src/components/LoginForm.tsx
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { useLogin } from "@/hooks/useAuth";
+import { useState } from "react";
+import { useLogin, useVerifyMfa } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { EyeIcon, EyeOffIcon, Loader2, ArrowRight } from "lucide-react";
+import {
+  EyeIcon,
+  EyeOffIcon,
+  Loader2,
+  ArrowRight,
+  Smartphone,
+} from "lucide-react";
 import GoogleLogo from "@/assets/google-icon.svg";
 import { MiniToolboxIllustration } from "@/components/MiniIllustration";
 
@@ -21,6 +27,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { MfaVerifyDialog } from "./MfaVerifyDialog";
+import type { AuthResponse } from "@/services/auth.service";
+
+const GOOGLE_AUTH_URL = import.meta.env.VITE_GOOGLE_AUTH_URL;
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -36,6 +46,10 @@ export function LoginForm() {
   const loginMutation = useLogin();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [mfaOpen, setMfaOpen] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+
+  const verifyMfaMutation = useVerifyMfa();
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -43,12 +57,12 @@ export function LoginForm() {
     mode: "onSubmit",
   });
 
-  useEffect(() => {
-    if (loginMutation.isSuccess) {
-      const t = setTimeout(() => navigate("/home"), 800);
-      return () => clearTimeout(t);
-    }
-  }, [loginMutation.isSuccess, navigate]);
+  // useEffect(() => {
+  //   if (loginMutation.isSuccess) {
+  //     const t = setTimeout(() => navigate("/home"), 800);
+  //     return () => clearTimeout(t);
+  //   }
+  // }, [loginMutation.isSuccess, navigate]);
 
   const getErrorMessage = (err: unknown) => {
     if (!err) return "Login failed";
@@ -60,9 +74,16 @@ export function LoginForm() {
 
   function onSubmit(values: LoginValues) {
     loginMutation.mutate(values, {
-      onSuccess: () => {
-        toast.success("Login successful!");
+      onSuccess: (data: AuthResponse) => {
+        if (data.requiresMfa) {
+          setMfaError(null);
+          setMfaOpen(true);
+          return;
+        }
+
+        toast.success(data.message || "Login successful!");
         form.reset();
+        navigate("/home");
       },
       onError: (err: unknown) => {
         const message = getErrorMessage(err);
@@ -72,10 +93,32 @@ export function LoginForm() {
     });
   }
 
+  const mfaBusy = verifyMfaMutation.isPending;
+
+  function handleVerifyMfa(code: string) {
+    setMfaError(null);
+
+    verifyMfaMutation.mutate(
+      { code },
+      {
+        onSuccess: (data) => {
+          toast.success(data.message || "Login successful!");
+          setMfaOpen(false);
+          form.reset();
+          navigate("/home");
+        },
+        onError: (err: unknown) => {
+          const message = getErrorMessage(err);
+          setMfaError(message);
+        },
+      },
+    );
+  }
+
   const busy = loginMutation.isPending;
 
   const loginWithGoogle = () => {
-    window.location.href = "http://localhost:8000/auth/google/login";
+    window.location.href = GOOGLE_AUTH_URL;
   };
 
   return (
@@ -356,7 +399,6 @@ export function LoginForm() {
 
       {/* ── Outer shell: form + illustration side-by-side ── */}
       <div className="login-shell">
-
         {/* Left — form */}
         <div className="login-form-panel">
           <div className="login-eyebrow">
@@ -367,16 +409,25 @@ export function LoginForm() {
           <p className="login-subtitle">Enter your credentials to continue</p>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              style={{ display: "flex", flexDirection: "column", gap: "18px" }}
+            >
               <FormField
                 control={form.control}
                 name="email"
                 render={({ field }) => (
-                  <FormItem style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <FormItem
+                    style={{ display: "flex", flexDirection: "column", gap: 2 }}
+                  >
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" autoComplete="email" {...field}/>
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -387,10 +438,16 @@ export function LoginForm() {
                 control={form.control}
                 name="password"
                 render={({ field }) => (
-                  <FormItem style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  <FormItem
+                    style={{ display: "flex", flexDirection: "column", gap: 0 }}
+                  >
                     <div className="field-header">
-                      <FormLabel style={{ marginBottom: 0 }}>Password</FormLabel>
-                      <Link to="/forgot-password" className="forgot-link">Forgot password?</Link>
+                      <FormLabel style={{ marginBottom: 0 }}>
+                        Password
+                      </FormLabel>
+                      <Link to="/forgot-password" className="forgot-link">
+                        Forgot password?
+                      </Link>
                     </div>
                     <FormControl>
                       <div className="password-field-wrapper">
@@ -399,10 +456,19 @@ export function LoginForm() {
                           placeholder="••••••••••"
                           autoComplete="current-password"
                           {...field}
-                          style={{ paddingRight: '44px' }}
+                          style={{ paddingRight: "44px" }}
                         />
-                        <Button type="button" className="eye-btn" onClick={() => setShowPassword(s => !s)} tabIndex={-1}>
-                          {showPassword ? <EyeOffIcon size={16}/> : <EyeIcon size={16}/>}
+                        <Button
+                          type="button"
+                          className="eye-btn"
+                          onClick={() => setShowPassword((s) => !s)}
+                          tabIndex={-1}
+                        >
+                          {showPassword ? (
+                            <EyeOffIcon size={16} />
+                          ) : (
+                            <EyeIcon size={16} />
+                          )}
                         </Button>
                       </div>
                     </FormControl>
@@ -411,22 +477,49 @@ export function LoginForm() {
                 )}
               />
 
-              <Button type="submit" className="btn-primary" disabled={busy} style={{ marginTop: '6px' }}>
-                {busy
-                  ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }}/>
-                  : <><span>Login</span><ArrowRight size={16}/></>
-                }
+              <Button
+                type="submit"
+                className="btn-primary"
+                disabled={busy}
+                style={{ marginTop: "6px" }}
+              >
+                {busy ? (
+                  <Loader2
+                    size={18}
+                    style={{ animation: "spin 1s linear infinite" }}
+                  />
+                ) : (
+                  <>
+                    <span>Login</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
               </Button>
 
               <div className="login-divider">
-                <div className="login-divider-line"/>
+                <div className="login-divider-line" />
                 <span className="login-divider-text">or</span>
-                <div className="login-divider-line"/>
+                <div className="login-divider-line" />
               </div>
 
-              <Button type="button" className="btn-google" onClick={loginWithGoogle}>
-                <img src={GoogleLogo} alt="Google" style={{ width: 18, height: 18 }}/>
+              <Button
+                type="button"
+                className="btn-google"
+                onClick={loginWithGoogle}
+              >
+                <img
+                  src={GoogleLogo}
+                  alt="Google"
+                  style={{ width: 18, height: 18 }}
+                />
                 Continue with Google
+              </Button>
+              <Button
+                type="button"
+                className="btn-google"
+                onClick={() => navigate("/mobile-login")}
+              >
+                <Smartphone /> Login with Mobile
               </Button>
             </form>
           </Form>
@@ -440,8 +533,18 @@ export function LoginForm() {
         <div className="login-illustration-panel">
           <MiniToolboxIllustration />
         </div>
-
       </div>
+      <MfaVerifyDialog
+        open={mfaOpen}
+        busy={mfaBusy}
+        error={mfaError}
+        onClose={() => {
+          if (mfaBusy) return;
+          setMfaOpen(false);
+          setMfaError(null);
+        }}
+        onVerify={handleVerifyMfa}
+      />
     </>
   );
 }

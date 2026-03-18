@@ -9,11 +9,12 @@ from app.schemas.vault_items_schema import (
     VaultItemUpdate,
     VaultItemOut,
 )
-from app.deps.auth_deps import get_current_user_email
+from app.deps.auth_deps import get_current_user
 from app.core.logger import logger
 
 
 router = APIRouter(prefix="/api/passlock/items", tags=["PassLock Items"])
+
 
 def get_db(request: Request):
     db = getattr(request.app.state, "db", None)
@@ -37,19 +38,20 @@ def to_out(doc) -> VaultItemOut:
     )
 
 
-# ---------------- CREATE ----------------
+# CREATE 
 
 @router.post("", response_model=VaultItemOut)
 async def create_item(
     payload: VaultItemCreate,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
     now = datetime.now(timezone.utc)
+    user_id = current_user["_id"]
+    user_email = current_user.get("userEmail") or current_user.get("email")
 
     doc = {
-        "userEmail": email,
+        "userId": user_id,
         "name": payload.name.strip(),
         "username": payload.username,
         "url": payload.url,
@@ -64,22 +66,22 @@ async def create_item(
     res = await db.vault_items.insert_one(doc)
     doc["_id"] = res.inserted_id
 
-    logger.info(f"[PASSLOCK] create item user={email} id={doc['_id']}")
+    logger.info(f"[PASSLOCK] create item userId={str(user_id)} id={doc['_id']}")
     return to_out(doc)
 
 
-# ---------------- LIST ----------------
+# LIST
 
 @router.get("", response_model=List[VaultItemOut])
 async def list_items(
-    request: Request,
+    current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
     folder: Optional[str] = Query(None),
     favorite: Optional[bool] = Query(None),
 ):
-    email = get_current_user_email(request)
+    user_id = current_user["_id"]
 
-    filt = {"userEmail": email}
+    filt = {"userId": user_id}
 
     if folder is not None:
         filt["folder"] = folder
@@ -87,35 +89,29 @@ async def list_items(
     if favorite is not None:
         filt["favorite"] = favorite
 
-    cursor = (
-        db.vault_items.find(filt)
-        .sort([("favorite", -1), ("updatedAt", -1)])
-    )
-
+    cursor = db.vault_items.find(filt).sort([("favorite", -1), ("updatedAt", -1)])
     items = await cursor.to_list(length=500)
 
-    logger.info(f"[PASSLOCK] list items user={email} count={len(items)}")
+    logger.info(f"[PASSLOCK] list items userId={str(user_id)} count={len(items)}")
     return [to_out(d) for d in items]
 
 
-# ---------------- GET ONE ----------------
+# GET ONE
 
 @router.get("/{item_id}", response_model=VaultItemOut)
 async def get_item(
     item_id: str,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
+    user_id = current_user["_id"]
 
     try:
         oid = ObjectId(item_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid item id")
 
-    doc = await db.vault_items.find_one(
-        {"_id": oid, "userEmail": email}
-    )
+    doc = await db.vault_items.find_one({"_id": oid, "userId": user_id})
 
     if not doc:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -123,16 +119,16 @@ async def get_item(
     return to_out(doc)
 
 
-# ---------------- UPDATE ----------------
+# UPDATE 
 
 @router.patch("/{item_id}", response_model=VaultItemOut)
 async def update_item(
     item_id: str,
     payload: VaultItemUpdate,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
+    user_id = current_user["_id"]
 
     try:
         oid = ObjectId(item_id)
@@ -142,7 +138,10 @@ async def update_item(
     update = {}
 
     if payload.name is not None:
-        update["name"] = payload.name.strip()
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name cannot be empty")
+        update["name"] = name
 
     if payload.username is not None:
         update["username"] = payload.username
@@ -168,39 +167,37 @@ async def update_item(
     update["updatedAt"] = datetime.now(timezone.utc)
 
     doc = await db.vault_items.find_one_and_update(
-        {"_id": oid, "userEmail": email},
+        {"_id": oid, "userId": user_id},
         {"$set": update},
-        return_document=ReturnDocument.AFTER
+        return_document=ReturnDocument.AFTER,
     )
 
     if not doc:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    logger.info(f"[PASSLOCK] update item user={email} id={item_id}")
+    logger.info(f"[PASSLOCK] update item userId={str(user_id)} id={item_id}")
     return to_out(doc)
 
 
-# ---------------- DELETE ----------------
+# DELETE 
 
 @router.delete("/{item_id}")
 async def delete_item(
     item_id: str,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
 ):
-    email = get_current_user_email(request)
+    user_id = current_user["_id"]
 
     try:
         oid = ObjectId(item_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid item id")
 
-    res = await db.vault_items.delete_one(
-        {"_id": oid, "userEmail": email}
-    )
+    res = await db.vault_items.delete_one({"_id": oid, "userId": user_id})
 
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    logger.info(f"[PASSLOCK] delete item user={email} id={item_id}")
+    logger.info(f"[PASSLOCK] delete item userId={str(user_id)} id={item_id}")
     return {"ok": True}

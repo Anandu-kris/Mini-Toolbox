@@ -162,7 +162,7 @@ export function AiFloatingPanel({
 };
 
   return (
-    <div className={cn("absolute bottom-5 right-5 z-50", className)}>
+    <div className={cn("absolute bottom-10 right-8 z-50", className)}>
       {/* Panel */}
       <div
         ref={panelRef}

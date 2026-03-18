@@ -20,6 +20,8 @@ import PassLockPage from "./pages/PassLockPage";
 import WordlePage from "./pages/WordlePage";
 import ErrorPage from "./pages/ErrorPage";
 import ProfilePage from "./pages/ProfilePage";
+import FinanceManagerPage from "./pages/FinanceManagerPage";
+import MobileLoginPage from "./pages/MobileLoginPage";
 
 export default function App() {
   return (
@@ -28,7 +30,7 @@ export default function App() {
 
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
-
+        <Route path="/mobile-login" element={<MobileLoginPage />} />
         <Route path="*" element={<ErrorPage />}></Route>
 
         {/* PUBLIC ROUTES */}
@@ -55,6 +57,7 @@ export default function App() {
             <Route path="pomodoro" element={<PomodoroPage />} />
             <Route path="passlock" element={<PassLockPage />} />
             <Route path="wordle" element={<WordlePage />} />
+            <Route path="finance" element={<FinanceManagerPage />} />
           </Route>
         </Route>
       </Routes>

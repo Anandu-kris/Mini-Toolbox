@@ -1,8 +1,17 @@
-.env
-.venv
-.vscode
-app/__pycache__
-app/logs
+# Python
 __pycache__/
 *.pyc
 *.pyo
+
+# Virtual env
+.venv/
+.env
+
+# IDE
+.vscode/
+
+# Logs
+app/logs/
+
+# OS
+.DS_Store
