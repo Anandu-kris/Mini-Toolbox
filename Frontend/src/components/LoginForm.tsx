@@ -30,6 +30,8 @@ import {
 import { MfaVerifyDialog } from "./MfaVerifyDialog";
 import type { AuthResponse } from "@/services/auth.service";
 
+const GOOGLE_AUTH_URL = import.meta.env.VITE_GOOGLE_AUTH_URL;
+
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z
@@ -92,7 +94,7 @@ export function LoginForm() {
   }
 
   const mfaBusy = verifyMfaMutation.isPending;
-  
+
   function handleVerifyMfa(code: string) {
     setMfaError(null);
 
@@ -116,7 +118,7 @@ export function LoginForm() {
   const busy = loginMutation.isPending;
 
   const loginWithGoogle = () => {
-    window.location.href = "http://localhost:8000/auth/google/login";
+    window.location.href = GOOGLE_AUTH_URL;
   };
 
   return (
