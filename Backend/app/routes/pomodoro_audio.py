@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.deps.auth_deps import get_current_user_email
+from app.deps.auth_deps import get_current_user
 from app.schemas.pomodoro_audio_schema import (
     PomodoroAudioSettingsIn,
     PomodoroAudioSettingsOut,
@@ -21,12 +21,12 @@ def get_db(request: Request):
 
 @router.get("/audio-settings", response_model=PomodoroAudioSettingsOut)
 async def get_audio_settings(
-    request: Request,
-    user_email: str = Depends(get_current_user_email),
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
 ):
-    db = get_db(request)
+    user_id = current_user["_id"]
 
-    doc = await db.pomodoro_audio_settings.find_one({"userEmail": user_email})
+    doc = await db.pomodoro_audio_settings.find_one({"userId": user_id})
 
     if not doc:
         return PomodoroAudioSettingsOut(
@@ -51,13 +51,14 @@ async def get_audio_settings(
 @router.put("/audio-settings", response_model=PomodoroAudioSettingsSaveResponse)
 async def update_audio_settings(
     payload: PomodoroAudioSettingsIn,
-    request: Request,
-    user_email: str = Depends(get_current_user_email),
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
 ):
-    db = get_db(request)
+    user_id = current_user["_id"]
+    user_email = current_user.get("userEmail") or current_user.get("email")
 
     doc = {
-        "userEmail": user_email,
+        "userId": user_id,
         "selectedSoundId": payload.selectedSoundId,
         "volume": payload.volume,
         "autoPlayFocus": payload.autoPlayFocus,
@@ -67,8 +68,13 @@ async def update_audio_settings(
     }
 
     await db.pomodoro_audio_settings.update_one(
-        {"userEmail": user_email},
-        {"$set": doc},
+        {"userId": user_id},
+        {
+            "$set": doc,
+            "$setOnInsert": {
+                "createdAt": datetime.now(timezone.utc),
+            },
+        },
         upsert=True,
     )
 

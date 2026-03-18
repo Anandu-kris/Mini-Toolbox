@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     JWT_REFRESH_TOKEN_EXPIRE_TIME: int = int(
         os.getenv("JWT_REFRESH_TOKEN_EXPIRE_TIME", "6")
     )
-    URL_EXPIRY_DAYS: int = int(os.getenv("URL_EXPIRY_DAYS", "90"))
+    URL_EXPIRY_DAYS: int = int(os.getenv("URL_EXPIRY_DAYS", "150"))
     GOOGLE_CLIENT_ID: str | None = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str | None = os.getenv("GOOGLE_CLIENT_SECRET")
     GOOGLE_REDIRECT_URI: str | None = os.getenv("GOOGLE_REDIRECT_URI")
@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
     OPENAI_EMBED_MODEL: str | None = os.getenv("OPENAI_EMBED_MODEL")
     OPENAI_CHAT_MODEL: str | None = os.getenv("OPENAI_CHAT_MODEL")
+    OPENAI_CHAT_URL: str | None = os.getenv("OPENAI_CHAT_URL")
+    OPENAI_EMBED_URL: str | None = os.getenv("OPENAI_EMBED_URL")
+    EMBED_DIM: int = 1536
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "gemini")
     GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
@@ -40,6 +43,12 @@ class Settings(BaseSettings):
     TWILIO_VERIFY_SERVICE_SID: str | None = os.getenv("TWILIO_VERIFY_SERVICE_SID")
     TOTP_ENCRYPTION_KEY: str | None = os.getenv("TOTP_ENCRYPTION_KEY")
     TOTP_ISSUER_NAME: str | None = os.getenv("TOTP_ISSUER_NAME")
+    WORDLE_WORD_LENGTH: int = 5
+    WORDLE_MAX_ATTEMPTS: int = 6
+    MAX_QUERY_CHARS: int = 500
+    MAX_NOTE_CHARS: int = 12000
+    COPILOT_TOP_K: int = 6
+    COPILOT_TOP_K_MAX: int = 10
 
     @model_validator(mode="after")
     def validate_env(self):

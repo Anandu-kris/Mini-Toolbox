@@ -31,19 +31,27 @@ async def connect_to_mongo(app):
     )
 
     # Url Shortner Indexes
+    await app.state.db.urls.create_index([("userId", 1), ("createdAt", -1)])
     await app.state.db.urls.create_index("expiresAt", expireAfterSeconds=0)
     await app.state.db.urls.create_index("shortId", unique=True)
     await app.state.db.urls.create_index("longUrl")
 
     # Notes Indexes
-    await app.state.db.notes.create_index([("userEmail", 1), ("updatedAt", -1)])
-    await app.state.db.notes.create_index([("userEmail", 1), ("pinned", -1), ("updatedAt", -1)])
-    await app.state.db.notes.create_index([("userEmail", 1), ("tags", 1)])
+    await app.state.db.notes.create_index([("userId", 1), ("updatedAt", -1)])
+    await app.state.db.notes.create_index([("userId", 1), ("pinned", -1), ("updatedAt", -1)])
+    await app.state.db.notes.create_index([("userId", 1), ("tags", 1)])
+    
+    # AI Note Chunk Indexes
+    await app.state.db.note_chunks.create_index([("userId", 1), ("noteId", 1)])
+    await app.state.db.note_chunks.create_index([("userId", 1), ("noteId", 1), ("contentHash", 1)])
+    
+    # AI Logs Indexes
+    await app.state.db.ai_logs.create_index([("userId", 1), ("createdAt", -1)])
 
     # Tasks Indexes (Kanban)
-    await app.state.db.tasks.create_index([("userEmail", 1), ("updatedAt", -1)])
-    await app.state.db.tasks.create_index([("userEmail", 1), ("status", 1), ("updatedAt", -1)])
-    await app.state.db.tasks.create_index([("userEmail", 1), ("dueAt", 1)])
+    await app.state.db.tasks.create_index([("userId", 1), ("updatedAt", -1)])
+    await app.state.db.tasks.create_index([("userId", 1), ("status", 1), ("updatedAt", -1)])
+    await app.state.db.tasks.create_index([("userId", 1), ("dueAt", 1)])
 
     # Wordle indexes
     await app.state.db.wordle_answers.create_index([("word", 1)], unique=True)
@@ -55,6 +63,15 @@ async def connect_to_mongo(app):
     await app.state.db.wordle_games.create_index([("userEmail", 1), ("status", 1)])
 
     await seed_wordle_if_empty(app.state.db)
+    
+    # Passlock indexes
+    await app.state.db.vault_meta.create_index("userId", unique=True)
+    await app.state.db.vault_items.create_index([("userId", 1), ("updatedAt", -1)])
+    await app.state.db.vault_items.create_index([("userId", 1), ("folder", 1), ("updatedAt", -1)])
+    await app.state.db.vault_items.create_index([("userId", 1), ("favorite", 1), ("updatedAt", -1)])
+    
+    #pomodoro_audio
+    await app.state.db.pomodoro_audio_settings.create_index("userId", unique=True)
 
     # Finance manager indexes
     await app.state.db.finance_accounts.create_index([("userEmail", 1), ("createdAt", -1)])

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from datetime import datetime, timezone
 
 from app.core.logger import logger
-from app.deps.auth_deps import get_current_user_email
+from app.deps.auth_deps import get_current_user
 from app.schemas.passlock_schema import VaultSetupRequest, VaultMetaOut, VaultMetaPatch
 from pymongo import ReturnDocument
 
@@ -32,10 +32,12 @@ def to_meta_out(doc) -> VaultMetaOut:
 
 @router.get("/meta", response_model=VaultMetaOut)
 async def get_vault_meta(
-    email: str = Depends(get_current_user_email),
+    current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
 ):
-    doc = await db.vault_meta.find_one({"userEmail": email})
+    user_id = current_user["_id"]
+
+    doc = await db.vault_meta.find_one({"userId": user_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Vault not initialized")
 
@@ -45,17 +47,19 @@ async def get_vault_meta(
 @router.post("/setup", response_model=VaultMetaOut)
 async def setup_vault(
     payload: VaultSetupRequest,
-    email: str = Depends(get_current_user_email),
+    current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
 ):
     now = datetime.now(timezone.utc)
+    user_id = current_user["_id"]
+    user_email = current_user.get("userEmail") or current_user.get("email")
 
-    existing = await db.vault_meta.find_one({"userEmail": email})
+    existing = await db.vault_meta.find_one({"userId": user_id})
     if existing:
         raise HTTPException(status_code=409, detail="Vault already initialized")
 
     doc = {
-        "userEmail": email,
+        "userId": user_id,
         "kdf": payload.kdf,
         "kdfParams": payload.kdfParams.model_dump(),
         "salt": payload.salt,
@@ -68,7 +72,7 @@ async def setup_vault(
     }
 
     await db.vault_meta.insert_one(doc)
-    logger.info(f"[PASSLOCK] vault initialized user={email}")
+    logger.info(f"[PASSLOCK] vault initialized userId={str(user_id)}")
 
     return to_meta_out(doc)
 
@@ -76,16 +80,20 @@ async def setup_vault(
 @router.patch("/meta", response_model=VaultMetaOut)
 async def patch_vault_meta(
     payload: VaultMetaPatch,
-    email: str = Depends(get_current_user_email),
+    current_user: dict = Depends(get_current_user),
     db=Depends(get_db),
 ):
     now = datetime.now(timezone.utc)
+    user_id = current_user["_id"]
 
-    existing = await db.vault_meta.find_one({"userEmail": email})
+    existing = await db.vault_meta.find_one({"userId": user_id})
     if not existing:
         raise HTTPException(status_code=404, detail="Vault not set up")
 
-    if payload.expectedVersion is not None and payload.expectedVersion != existing.get("version"):
+    if (
+        payload.expectedVersion is not None
+        and payload.expectedVersion != existing.get("version")
+    ):
         raise HTTPException(status_code=409, detail="Vault meta version conflict")
 
     update = {
@@ -100,7 +108,7 @@ async def patch_vault_meta(
     }
 
     doc = await db.vault_meta.find_one_and_update(
-        {"userEmail": email},
+        {"userId": user_id},
         {"$set": update},
         return_document=ReturnDocument.AFTER,
     )
