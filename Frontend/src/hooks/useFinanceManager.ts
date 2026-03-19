@@ -70,9 +70,7 @@ export const financeKeys = {
     ["finance", "dashboard", "summary", params] as const,
 };
 
-/* =========================
-   Accounts
-========================= */
+  //  Accounts
 
 export function useFinanceAccounts(enabled = true) {
   return useQuery<FinanceAccountItem[], AxiosError<ApiErrorBody>>({
@@ -146,9 +144,7 @@ export function useDeleteFinanceAccount() {
   });
 }
 
-/* =========================
-   Categories
-========================= */
+  //  Categories
 
 export function useFinanceCategories(
   params: FinanceCategoriesListParams = {},
@@ -226,9 +222,7 @@ export function useDeleteFinanceCategory() {
   });
 }
 
-/* =========================
-   Transactions
-========================= */
+  //  Transactions
 
 export function useFinanceTransactions(
   params: FinanceTransactionsListParams = {},
@@ -314,9 +308,7 @@ export function useDeleteFinanceTransaction() {
   });
 }
 
-/* =========================
-   Budgets
-========================= */
+  //  Budgets
 
 export function useFinanceBudgets(enabled = true) {
   return useQuery<FinanceBudgetItem[], AxiosError<ApiErrorBody>>({
@@ -399,9 +391,7 @@ export function useDeleteFinanceBudget() {
   });
 }
 
-/* =========================
-   Dashboard
-========================= */
+  //  Dashboard
 
 export function useFinanceDashboardSummary(
   params: FinanceDashboardSummaryParams = {},

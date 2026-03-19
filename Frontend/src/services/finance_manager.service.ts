@@ -222,7 +222,7 @@ export type FinanceMessageResponse = {
   //  Service
 
 export const financeManagerService = {
-  /* -------- Accounts -------- */
+  /* Accounts  */
 
   createAccount: async (
     payload: FinanceAccountCreatePayload,
@@ -251,7 +251,7 @@ export const financeManagerService = {
     return res.data;
   },
 
-  /* -------- Categories -------- */
+  /* Categories  */
 
   createCategory: async (
     payload: FinanceCategoryCreatePayload,
@@ -285,7 +285,7 @@ export const financeManagerService = {
     return res.data;
   },
 
-  /* -------- Transactions -------- */
+  /* Transactions  */
 
   createTransaction: async (
     payload: FinanceTransactionCreatePayload,
@@ -319,7 +319,7 @@ export const financeManagerService = {
     return res.data;
   },
 
-  /* -------- Budgets -------- */
+  /* Budgets */
 
   createBudget: async (
     payload: FinanceBudgetCreatePayload,
@@ -353,7 +353,7 @@ export const financeManagerService = {
     return res.data;
   },
 
-  /* -------- Dashboard -------- */
+  /* Dashboard  */
 
   getDashboardSummary: async (
     params: FinanceDashboardSummaryParams = {},

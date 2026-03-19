@@ -23,9 +23,7 @@ const FinanceHeader = () => {
 
   return (
     <>
-      {/* ── Outer shell ───────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/3 backdrop-blur-xl shadow-[0_24px_64px_rgba(0,0,0,0.28)]">
-        {/* ── Top gradient hairline ──────────────────────────────────── */}
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px]"
           style={{
@@ -34,7 +32,6 @@ const FinanceHeader = () => {
           }}
         />
 
-        {/* ── Ambient bloom blobs ───────────────────────────────────── */}
         <div
           className="pointer-events-none absolute -left-16 -top-16 h-72 w-72 rounded-full opacity-[0.12]"
           style={{ background: "#8b5cf6", filter: "blur(56px)" }}
@@ -44,7 +41,6 @@ const FinanceHeader = () => {
           style={{ background: "#06b6d4", filter: "blur(56px)" }}
         />
 
-        {/* ── Fine grid texture overlay ─────────────────────────────── */}
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.025]"
           style={{
@@ -54,17 +50,13 @@ const FinanceHeader = () => {
           }}
         />
 
-        {/* ── Content ───────────────────────────────────────────────── */}
         <div className="relative flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
-          {/* Left — branding + copy */}
           <div className="space-y-3">
-            {/* Badge */}
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-1 text-[12px] font-semibold uppercase tracking-widest text-cyan-500">
               <Wallet className="h-4 w-4" />
               Personal Finance
             </div>
 
-            {/* Headline */}
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-[1.75rem]">
                 Track expenses,{" "}
@@ -84,7 +76,6 @@ const FinanceHeader = () => {
               </p>
             </div>
 
-            {/* Stat pills */}
             <div className="flex flex-wrap gap-2 pt-1">
               {[
                 { label: "Accounts", value: accounts.length },
@@ -137,7 +128,6 @@ const FinanceHeader = () => {
           </div>
         </div>
 
-        {/* ── Bottom edge accent line ────────────────────────────────── */}
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 h-px opacity-20"
           style={{
