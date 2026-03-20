@@ -21,9 +21,9 @@ from app.services.wordle_service import (
     evaluate_guess,
 )
 from app.config import settings
+from app.realtime.emitter import emit_user_event
 
 router = APIRouter(prefix="/api/wordle", tags=["Wordle"])
-
 
 def get_db(request: Request):
     db = getattr(request.app.state, "db", None)
@@ -32,11 +32,83 @@ def get_db(request: Request):
     return db
 
 
+async def emit_new_wordle_notification_if_needed(
+    *,
+    db,
+    user_id: str,
+    day_id: str,
+) -> None:
+    """
+    Emit a 'new Wordle game is ready' notification once per user per day.
+
+    Since you are not storing notifications in a notifications table,
+    we store only a tiny delivery marker in MongoDB so the same event
+    is not emitted repeatedly for the same user/day.
+    """
+    already_sent = await db.wordle_notification_delivery.find_one(
+        {
+            "userId": user_id,
+            "dayId": day_id,
+            "type": "wordle.daily_ready",
+        }
+    )
+
+    if already_sent:
+        return
+
+    now = dt.now(timezone.utc)
+
+    await emit_user_event(
+        user_id=str(user_id),
+        event_type="notification.created",
+        module="notifications",
+        payload={
+            "id": f"wordle_daily_ready_{user_id}_{day_id}",
+            "title": "New Wordle game is ready",
+            "message": "Today's Wordle has reset. A new word is now available to play.",
+            "createdAt": now.isoformat(),
+            "read": False,
+            "severity": "info",
+        },
+        meta={
+            "source": "wordle",
+            "kind": "wordle.daily_ready",
+            "dayId": day_id,
+        },
+    )
+
+    await db.wordle_notification_delivery.insert_one(
+        {
+            "userId": user_id,
+            "dayId": day_id,
+            "type": "wordle.daily_ready",
+            "createdAt": now,
+        }
+    )
+    
 # Daily Game
 @router.get("/daily", response_model=WordleDailyResponse)
-async def get_daily():
+async def get_daily(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    user_id = current_user["_id"]
+    day_id = utc_day_id()
+
+    await get_or_create_daily_answer(
+        db,
+        day_id,
+        length=settings.WORDLE_WORD_LENGTH,
+    )
+
+    await emit_new_wordle_notification_if_needed(
+        db=db,
+        user_id=user_id,
+        day_id=day_id,
+    )
+
     return WordleDailyResponse(
-        dayId=utc_day_id(),
+        dayId=day_id,
         length=settings.WORDLE_WORD_LENGTH,
         maxAttempts=settings.WORDLE_MAX_ATTEMPTS,
     )
@@ -183,6 +255,19 @@ async def finish_game(
         return dt.strptime(s, "%Y-%m-%d")
 
     if payload.status == "won":
+        await emit_user_event(
+            user_id=str(user_id),
+            event_type="notification.created",
+            module="notifications",
+            payload={
+                "id": f"wordle_win_{user_id}_{day_id}",
+                "title": "Wordle won",
+                "message": f"You solved today's Wordle in {payload.attemptsUsed} attempts.",
+                "createdAt": now.isoformat(),
+                "read": False,
+                "severity": "success",
+            },
+        )
         if payload.attemptsUsed < 1 or payload.attemptsUsed > 6:
             raise HTTPException(status_code=400, detail="Invalid attemptsUsed")
 
@@ -202,6 +287,20 @@ async def finish_game(
         dist[str(payload.attemptsUsed)] = int(dist.get(str(payload.attemptsUsed), 0)) + 1
     else:
         current = 0
+        if payload.status == "lost":
+            await emit_user_event(
+                user_id=str(user_id),
+                event_type="notification.created",
+                module="notifications",
+                payload={
+                    "id": f"wordle_lost_{user_id}_{day_id}",
+                    "title": "Wordle finished",
+                    "message": "Today's Wordle game has ended. Try again tomorrow.",
+                    "createdAt": now.isoformat(),
+                    "read": False,
+                    "severity": "warning",
+                },
+            )
 
     played += 1
     maxs = max(maxs, current)
