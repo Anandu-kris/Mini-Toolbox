@@ -14,5 +14,4 @@ def serialize_finance_doc(doc: dict[str, Any]) -> dict[str, Any]:
         if key in doc and doc[key] is not None:
             doc[key] = str(doc[key])
     
-    print("SERIALIZED DOC:", doc)
     return doc
