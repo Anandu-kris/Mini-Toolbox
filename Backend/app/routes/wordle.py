@@ -15,7 +15,7 @@ from app.schemas.wordle_schema import (
 )
 from app.deps.auth_deps import get_current_user
 from app.services.wordle_service import (
-    utc_day_id,
+    wordle_day_id,
     get_or_create_daily_answer,
     is_allowed_guess,
     evaluate_guess,
@@ -93,7 +93,7 @@ async def get_daily(
     db=Depends(get_db),
 ):
     user_id = current_user["_id"]
-    day_id = utc_day_id()
+    day_id = wordle_day_id()
 
     await get_or_create_daily_answer(
         db,
@@ -129,7 +129,7 @@ async def submit_guess(
     if len(guess) != settings.WORDLE_WORD_LENGTH or not guess.isalpha():
         raise HTTPException(status_code=400, detail="Guess must be 5 letters")
 
-    if day_id != utc_day_id():
+    if day_id != wordle_day_id():
         raise HTTPException(status_code=400, detail="Invalid dayId")
 
     allowed = await is_allowed_guess(db, guess, length=settings.WORDLE_WORD_LENGTH)
@@ -222,7 +222,7 @@ async def finish_game(
     user_email = current_user.get("userEmail") or current_user.get("email")
     day_id = payload.dayId.strip()
 
-    if day_id != utc_day_id():
+    if day_id != wordle_day_id():
         raise HTTPException(status_code=400, detail="Invalid dayId")
 
     game = await db.wordle_games.find_one({"userId": user_id, "dayId": day_id})

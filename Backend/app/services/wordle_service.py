@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import hashlib
 from typing import List, Literal
+from app.config import settings
 
 Tile = Literal["correct", "present", "absent"]
 
-def utc_day_id(dt: datetime | None = None) -> str:
-    dt = dt or datetime.now(timezone.utc)
+WORDLE_TIMEZONE = ZoneInfo(settings.WORDLE_TIMEZONE)
+
+def wordle_day_id(dt: datetime | None = None) -> str:
+    if dt is None:
+        dt = datetime.now(WORDLE_TIMEZONE)
+    else:
+        dt = dt.astimezone(WORDLE_TIMEZONE)
     return dt.strftime("%Y-%m-%d")
 
 def evaluate_guess(answer: str, guess: str) -> List[Tile]:
-
     answer = answer.lower()
     guess = guess.lower()
 
@@ -21,14 +27,14 @@ def evaluate_guess(answer: str, guess: str) -> List[Tile]:
     for i, ch in enumerate(guess):
         if ch == answer_chars[i]:
             res[i] = "correct"
-            answer_chars[i] = None 
+            answer_chars[i] = None
 
     for i, ch in enumerate(guess):
         if res[i] == "correct":
             continue
         if ch in answer_chars:
             res[i] = "present"
-            answer_chars[answer_chars.index(ch)] = None 
+            answer_chars[answer_chars.index(ch)] = None
         else:
             res[i] = "absent"
 
