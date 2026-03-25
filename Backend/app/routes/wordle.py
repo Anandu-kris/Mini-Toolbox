@@ -15,15 +15,15 @@ from app.schemas.wordle_schema import (
 )
 from app.deps.auth_deps import get_current_user
 from app.services.wordle_service import (
-    utc_day_id,
+    wordle_day_id,
     get_or_create_daily_answer,
     is_allowed_guess,
     evaluate_guess,
 )
 from app.config import settings
+from app.services.notifications_service import create_notification
 
 router = APIRouter(prefix="/api/wordle", tags=["Wordle"])
-
 
 def get_db(request: Request):
     db = getattr(request.app.state, "db", None)
@@ -32,11 +32,80 @@ def get_db(request: Request):
     return db
 
 
+async def emit_new_wordle_notification_if_needed(
+    *,
+    db,
+    user_id: str,
+    day_id: str,
+) -> None:
+    """
+    Emit a 'new Wordle game is ready' notification once per user per day.
+
+    Since you are not storing notifications in a notifications table,
+    we store only a tiny delivery marker in MongoDB so the same event
+    is not emitted repeatedly for the same user/day.
+    """
+    already_sent = await db.notification_delivery_markers.find_one(
+        {
+            "userId": user_id,
+            "dayId": day_id,
+            "type": "wordle.daily_ready",
+        }
+    )
+
+    if already_sent:
+        return
+
+    now = dt.now(timezone.utc)
+
+    await create_notification(
+        db=db,
+        user_id=str(user_id),
+        type="wordle.daily_ready",
+        title="New Wordle game is ready",
+        message="Today's Wordle has reset. A new word is now available to play.",
+        severity="info",
+        read=False,
+        meta={
+            "source": "wordle",
+            "kind": "wordle.daily_ready",
+            "dayId": day_id,
+        },
+        emit_realtime=True,
+    )
+
+    await db.notification_delivery_markers.insert_one(
+        {
+            "userId": user_id,
+            "dayId": day_id,
+            "type": "wordle.daily_ready",
+            "createdAt": now,
+        }
+    )
+    
 # Daily Game
 @router.get("/daily", response_model=WordleDailyResponse)
-async def get_daily():
+async def get_daily(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    user_id = current_user["_id"]
+    day_id = wordle_day_id()
+
+    await get_or_create_daily_answer(
+        db,
+        day_id,
+        length=settings.WORDLE_WORD_LENGTH,
+    )
+
+    await emit_new_wordle_notification_if_needed(
+        db=db,
+        user_id=user_id,
+        day_id=day_id,
+    )
+
     return WordleDailyResponse(
-        dayId=utc_day_id(),
+        dayId=day_id,
         length=settings.WORDLE_WORD_LENGTH,
         maxAttempts=settings.WORDLE_MAX_ATTEMPTS,
     )
@@ -57,7 +126,7 @@ async def submit_guess(
     if len(guess) != settings.WORDLE_WORD_LENGTH or not guess.isalpha():
         raise HTTPException(status_code=400, detail="Guess must be 5 letters")
 
-    if day_id != utc_day_id():
+    if day_id != wordle_day_id():
         raise HTTPException(status_code=400, detail="Invalid dayId")
 
     allowed = await is_allowed_guess(db, guess, length=settings.WORDLE_WORD_LENGTH)
@@ -150,7 +219,7 @@ async def finish_game(
     user_email = current_user.get("userEmail") or current_user.get("email")
     day_id = payload.dayId.strip()
 
-    if day_id != utc_day_id():
+    if day_id != wordle_day_id():
         raise HTTPException(status_code=400, detail="Invalid dayId")
 
     game = await db.wordle_games.find_one({"userId": user_id, "dayId": day_id})
@@ -183,6 +252,21 @@ async def finish_game(
         return dt.strptime(s, "%Y-%m-%d")
 
     if payload.status == "won":
+        await create_notification(
+            db=db,
+            user_id=str(user_id),
+            type="wordle.win",
+            title="Wordle won",
+            message=f"You solved today's Wordle in {payload.attemptsUsed} attempts.",
+            severity="success",
+            read=False,
+            meta={
+                "source": "wordle",
+                "kind": "wordle.win",
+                "dayId": day_id,
+                "attemptsUsed": payload.attemptsUsed,
+            },
+        )
         if payload.attemptsUsed < 1 or payload.attemptsUsed > 6:
             raise HTTPException(status_code=400, detail="Invalid attemptsUsed")
 
@@ -202,6 +286,21 @@ async def finish_game(
         dist[str(payload.attemptsUsed)] = int(dist.get(str(payload.attemptsUsed), 0)) + 1
     else:
         current = 0
+        if payload.status == "lost":
+            await create_notification(
+                db=db,
+                user_id=str(user_id),
+                type="wordle.lost",
+                title="Wordle finished",
+                message="Today's Wordle game has ended. Try again tomorrow.",
+                severity="warning",
+                read=False,
+                meta={
+                    "source": "wordle",
+                    "kind": "wordle.lost",
+                    "dayId": day_id,
+                },
+            )
 
     played += 1
     maxs = max(maxs, current)

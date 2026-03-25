@@ -1,4 +1,4 @@
-import { MobileLoginForm } from "@/components/MobileLoginForm";
+import { MobileLoginForm } from "@/components/Auth/MobileLoginForm";
 
 export default function MobileLoginPage() {
   return (

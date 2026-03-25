@@ -2,14 +2,18 @@ import { Link, Outlet } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import ShinyText from "@/components/Animation/ShinyText";
 import AccountDropdown from "@/components/AccountDropdown";
+import NotificationDropdown from "@/components/NotificationDropdown";
 import { useCurrentUser } from "@/hooks/useAuth";
+
 
 export default function AppLayout() {
   const { data: me } = useCurrentUser();
 
-const name = me?.name ?? undefined;
-const email = me?.email ?? undefined;
-const avatarUrl = me?.avatarUrl
+
+  const name = me?.name ?? undefined;
+  const email = me?.email ?? undefined;
+  const avatarUrl = me?.avatarUrl;
+
 
   return (
     <>
@@ -68,41 +72,36 @@ const avatarUrl = me?.avatarUrl
           line-height: 1;
         }
 
-        .app-logout-btn {
+        .app-right-actions {
           display: flex;
           align-items: center;
-          gap: 7px;
-          padding: 8px 14px;
-          border-radius: 10px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          color: rgba(255, 255, 255, 0.5);
-          font-family: 'Sora', sans-serif;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: background 0.2s, border-color 0.2s, color 0.2s;
+          gap: 12px;
         }
 
-        .app-logout-btn:hover:not(:disabled) {
-          background: rgba(255, 80, 80, 0.1);
-          border-color: rgba(255, 80, 80, 0.2);
-          color: rgba(255, 120, 120, 0.9);
-        }
-
-        .app-logout-btn:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
+        .app-unread-pill {
+          height: 28px;
+          min-width: 28px;
+          padding: 0 10px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          font-weight: 700;
+          color: white;
+          background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+          box-shadow: 0 8px 22px rgba(168, 85, 247, 0.28);
+          border: 1px solid rgba(255,255,255,0.14);
         }
       `}</style>
 
       <div className="h-dvh flex flex-col">
         <header className="app-header">
-          {/* Logo */}
           <Link to="/home" className="app-logo">
             <div className="app-logo-icon">
               <Sparkles size={15} color="white" />
             </div>
+
             <div className="app-logo-text">
               <ShinyText
                 text="Mini-Toolbox"
@@ -122,11 +121,16 @@ const avatarUrl = me?.avatarUrl
             </div>
           </Link>
 
-          <AccountDropdown
-            name={name}
-            email={email}
-            avatarUrl={avatarUrl}
-          />
+          <div className="app-right-actions">
+            <NotificationDropdown
+            />
+
+            <AccountDropdown
+              name={name}
+              email={email}
+              avatarUrl={avatarUrl}
+            />
+          </div>
         </header>
 
         <main className="flex-1 min-h-0 pt-2 pb-10">

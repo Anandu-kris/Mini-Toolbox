@@ -97,6 +97,11 @@ async def connect_to_mongo(app):
     await app.state.db.finance_budgets.create_index([("userEmail", 1), ("categoryId", 1), ("isActive", 1)])
     await app.state.db.finance_budgets.create_index([("userEmail", 1), ("startDate", 1), ("endDate", 1)])
 
+    #Notification Indexes
+    await app.state.db.notifications.create_index([("userId", 1), ("createdAt", -1)])
+    await app.state.db.notifications.create_index([("userId", 1), ("read", 1), ("createdAt", -1)])
+    await app.state.db.notification_delivery_markers.create_index([("userId", 1), ("dayId", 1), ("type", 1)],unique=True,)
+    await app.state.db.notification_delivery_markers.create_index([("createdAt", 1)],expireAfterSeconds=60 * 60 * 24 * 90,)
 
 async def close_mongo_connection(app):
     client = getattr(app.state, "mongo_client", None)

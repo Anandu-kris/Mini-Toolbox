@@ -1,8 +1,8 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 
-import { LoginForm } from "@/components/LoginForm";
-import { SignUpForm } from "@/components/SignUpForm";
+import { LoginForm } from "@/components/Auth/LoginForm";
+import { SignUpForm } from "@/components/Auth/SignUpForm";
 
 import AuthLayout from "@/layouts/AuthLayout";
 import AppLayout from "@/layouts/AppLayout";

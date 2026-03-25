@@ -40,6 +40,7 @@ from app.services.totp_service import (
     encrypt_totp_secret,
     decrypt_totp_secret,
 )
+from app.services.notifications_service import emit_daily_welcome_if_needed
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -243,6 +244,11 @@ async def login(user: UserLogin, response: Response, db=Depends(get_db)):
         {"_id": existing["_id"]},
         {"$set": {"lastLoginAt": datetime.now(timezone.utc)}},
     )
+    
+    await emit_daily_welcome_if_needed(
+        db=db,
+        user_id=user_id,
+    )
 
     logger.info(f"[AUTH] login success userId={user_id}")
     return {
@@ -301,7 +307,7 @@ async def get_me(request: Request, response: Response):
         max_age=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
-
+    
     return _serialize_user(user)
 
 # Mobile OTP Request
@@ -368,6 +374,11 @@ async def verify_mobile_login_otp(
     await db.users.update_one(
         {"_id": user["_id"]},
         {"$set": {"lastLoginAt": datetime.now(timezone.utc)}},
+    )
+    
+    await emit_daily_welcome_if_needed(
+        db=db,
+        user_id=str(user_id),
     )
 
     return {

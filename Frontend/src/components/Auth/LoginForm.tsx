@@ -27,7 +27,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { MfaVerifyDialog } from "./MfaVerifyDialog";
+import { MfaVerifyDialog } from "@/components/Auth/MfaVerifyDialog";
 import type { AuthResponse } from "@/services/auth.service";
 
 const GOOGLE_AUTH_URL = import.meta.env.VITE_GOOGLE_AUTH_URL;

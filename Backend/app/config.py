@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     MAX_NOTE_CHARS: int = 12000
     COPILOT_TOP_K: int = 6
     COPILOT_TOP_K_MAX: int = 10
+    WORDLE_TIMEZONE: str = "Asia/Kolkata"
 
     @model_validator(mode="after")
     def validate_env(self):
