@@ -7,10 +7,16 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-import type { AppNotification } from "@/types/notifications.types";
+import {
+  useNotifications,
+  useUnreadNotificationCount,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+} from "@/hooks/useNotifications";
+import type { NotificationItem } from "@/services/notifications.service";
 
 function formatRelativeTime(dateString: string) {
   const date = new Date(dateString);
@@ -36,7 +42,7 @@ function SeverityIcon({
   severity,
   className,
 }: {
-  severity?: AppNotification["severity"];
+  severity?: NotificationItem["severity"];
   className?: string;
 }) {
   switch (severity) {
@@ -51,22 +57,35 @@ function SeverityIcon({
   }
 }
 
-export default function NotificationDropdown({
-  notifications,
-  onMarkAllRead,
-  onMarkOneRead,
-}: {
-  notifications: AppNotification[];
-  onMarkAllRead?: () => void;
-  onMarkOneRead?: (id: string) => void;
-}) {
+export default function NotificationDropdown() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications],
-  );
+  const {
+    data: notificationsData,
+    isLoading: notificationsLoading,
+    isFetching: notificationsFetching,
+  } = useNotifications({
+    limit: 20,
+    skip: 0,
+    unreadOnly: false,
+  });
+
+  const { data: unreadData } = useUnreadNotificationCount();
+
+  const markOneRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+
+  const notifications = useMemo(() => {
+    return notificationsData?.items ?? [];
+  }, [notificationsData?.items]);
+  
+  const unreadCount = useMemo(() => {
+    if (typeof unreadData?.unreadCount === "number") {
+      return unreadData.unreadCount;
+    }
+    return notifications.filter((n) => !n.read).length;
+  }, [notifications, unreadData?.unreadCount]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -135,20 +154,35 @@ export default function NotificationDropdown({
 
             <button
               type="button"
-              onClick={onMarkAllRead}
+              onClick={() => markAllRead.mutate()}
+              disabled={unreadCount === 0 || markAllRead.isPending}
               className={cn(
                 "inline-flex items-center gap-2 rounded-xl border border-white/10",
                 "bg-white/4 px-3 py-2 text-xs font-medium text-white/70",
                 "transition hover:bg-white/8 hover:text-white",
+                "disabled:cursor-not-allowed disabled:opacity-50",
               )}
             >
-              <CheckCheck size={14} />
+              {markAllRead.isPending ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <CheckCheck size={14} />
+              )}
               Mark all read
             </button>
           </div>
 
           <div className="max-h-[420px] overflow-y-auto">
-            {notifications.length === 0 ? (
+            {notificationsLoading ? (
+              <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                <div className="mb-3 rounded-2xl border border-white/10 bg-white/4 p-3 text-white/60">
+                  <Loader2 size={20} className="animate-spin" />
+                </div>
+                <p className="text-sm font-medium text-white/80">
+                  Loading notifications...
+                </p>
+              </div>
+            ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
                 <div className="mb-3 rounded-2xl border border-white/10 bg-white/4 p-3 text-white/60">
                   <Bell size={20} />
@@ -167,7 +201,11 @@ export default function NotificationDropdown({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => onMarkOneRead?.(item.id)}
+                    onClick={() => {
+                      if (!item.read && !markOneRead.isPending) {
+                        markOneRead.mutate(item.id);
+                      }
+                    }}
                     className={cn(
                       "mb-2 w-full rounded-2xl border px-3 py-3 text-left transition",
                       item.read
@@ -221,6 +259,12 @@ export default function NotificationDropdown({
                     </div>
                   </button>
                 ))}
+
+                {notificationsFetching && (
+                  <div className="px-3 py-2 text-center text-xs text-white/40">
+                    Refreshing...
+                  </div>
+                )}
               </div>
             )}
           </div>

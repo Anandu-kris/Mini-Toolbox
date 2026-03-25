@@ -1,38 +1,19 @@
 import { Link, Outlet } from "react-router-dom";
 import { Sparkles } from "lucide-react";
-import { useMemo } from "react";
 import ShinyText from "@/components/Animation/ShinyText";
 import AccountDropdown from "@/components/AccountDropdown";
 import NotificationDropdown from "@/components/NotificationDropdown";
 import { useCurrentUser } from "@/hooks/useAuth";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {
-  markAllNotificationsRead,
-  markNotificationRead,
-} from "@/store/slices/notificationsSlice";
+
 
 export default function AppLayout() {
   const { data: me } = useCurrentUser();
-  const dispatch = useAppDispatch();
 
-  const notifications = useAppSelector((state) => state.notifications.items);
-
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications]
-  );
 
   const name = me?.name ?? undefined;
   const email = me?.email ?? undefined;
   const avatarUrl = me?.avatarUrl;
 
-  const handleMarkAllRead = () => {
-    dispatch(markAllNotificationsRead());
-  };
-
-  const handleMarkOneRead = (id: string) => {
-    dispatch(markNotificationRead(id));
-  };
 
   return (
     <>
@@ -141,14 +122,7 @@ export default function AppLayout() {
           </Link>
 
           <div className="app-right-actions">
-            {unreadCount > 0 && (
-              <span className="app-unread-pill">{unreadCount} new</span>
-            )}
-
             <NotificationDropdown
-              notifications={notifications}
-              onMarkAllRead={handleMarkAllRead}
-              onMarkOneRead={handleMarkOneRead}
             />
 
             <AccountDropdown

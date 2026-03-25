@@ -18,6 +18,7 @@ from app.routes.ai_notes import router as ai_router
 from app.routes.wordle import router as wordle_router
 from app.routes.pomodoro_audio import router as pomodoro_audio_router
 from app.routes.finance_manager import router as finance_manager_router
+from app.routes.notifications import router as notifications_router
 
 from app.realtime.pubsub import realtime_pubsub
 from app.realtime.routes import router as realtime_router
@@ -89,4 +90,5 @@ app.include_router(wordle_router)
 app.include_router(pomodoro_audio_router)
 app.include_router(finance_manager_router)
 app.include_router(realtime_router)
+app.include_router(notifications_router)
 

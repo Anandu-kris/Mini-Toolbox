@@ -21,7 +21,7 @@ from app.services.wordle_service import (
     evaluate_guess,
 )
 from app.config import settings
-from app.realtime.emitter import emit_user_event
+from app.services.notifications_service import create_notification
 
 router = APIRouter(prefix="/api/wordle", tags=["Wordle"])
 
@@ -45,7 +45,7 @@ async def emit_new_wordle_notification_if_needed(
     we store only a tiny delivery marker in MongoDB so the same event
     is not emitted repeatedly for the same user/day.
     """
-    already_sent = await db.wordle_notification_delivery.find_one(
+    already_sent = await db.notification_delivery_markers.find_one(
         {
             "userId": user_id,
             "dayId": day_id,
@@ -58,26 +58,23 @@ async def emit_new_wordle_notification_if_needed(
 
     now = dt.now(timezone.utc)
 
-    await emit_user_event(
+    await create_notification(
+        db=db,
         user_id=str(user_id),
-        event_type="notification.created",
-        module="notifications",
-        payload={
-            "id": f"wordle_daily_ready_{user_id}_{day_id}",
-            "title": "New Wordle game is ready",
-            "message": "Today's Wordle has reset. A new word is now available to play.",
-            "createdAt": now.isoformat(),
-            "read": False,
-            "severity": "info",
-        },
+        type="wordle.daily_ready",
+        title="New Wordle game is ready",
+        message="Today's Wordle has reset. A new word is now available to play.",
+        severity="info",
+        read=False,
         meta={
             "source": "wordle",
             "kind": "wordle.daily_ready",
             "dayId": day_id,
         },
+        emit_realtime=True,
     )
 
-    await db.wordle_notification_delivery.insert_one(
+    await db.notification_delivery_markers.insert_one(
         {
             "userId": user_id,
             "dayId": day_id,
@@ -255,17 +252,19 @@ async def finish_game(
         return dt.strptime(s, "%Y-%m-%d")
 
     if payload.status == "won":
-        await emit_user_event(
+        await create_notification(
+            db=db,
             user_id=str(user_id),
-            event_type="notification.created",
-            module="notifications",
-            payload={
-                "id": f"wordle_win_{user_id}_{day_id}",
-                "title": "Wordle won",
-                "message": f"You solved today's Wordle in {payload.attemptsUsed} attempts.",
-                "createdAt": now.isoformat(),
-                "read": False,
-                "severity": "success",
+            type="wordle.win",
+            title="Wordle won",
+            message=f"You solved today's Wordle in {payload.attemptsUsed} attempts.",
+            severity="success",
+            read=False,
+            meta={
+                "source": "wordle",
+                "kind": "wordle.win",
+                "dayId": day_id,
+                "attemptsUsed": payload.attemptsUsed,
             },
         )
         if payload.attemptsUsed < 1 or payload.attemptsUsed > 6:
@@ -288,17 +287,18 @@ async def finish_game(
     else:
         current = 0
         if payload.status == "lost":
-            await emit_user_event(
+            await create_notification(
+                db=db,
                 user_id=str(user_id),
-                event_type="notification.created",
-                module="notifications",
-                payload={
-                    "id": f"wordle_lost_{user_id}_{day_id}",
-                    "title": "Wordle finished",
-                    "message": "Today's Wordle game has ended. Try again tomorrow.",
-                    "createdAt": now.isoformat(),
-                    "read": False,
-                    "severity": "warning",
+                type="wordle.lost",
+                title="Wordle finished",
+                message="Today's Wordle game has ended. Try again tomorrow.",
+                severity="warning",
+                read=False,
+                meta={
+                    "source": "wordle",
+                    "kind": "wordle.lost",
+                    "dayId": day_id,
                 },
             )
 
