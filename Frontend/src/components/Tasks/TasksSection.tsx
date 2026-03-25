@@ -13,6 +13,7 @@ import {
   useTasksList,
   useUpdateTask,
 } from "@/hooks/useTasks";
+import { OrbitLoader } from "../ui/Loader";
 
 export function TasksSection() {
   const [q, setQ] = useState("");
@@ -20,7 +21,6 @@ export function TasksSection() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  // ✅ fetch from backend (optionally increase limit)
   const { data: tasks = [], isLoading } = useTasksList(
     { q, limit: 500, skip: 0 },
     true,
@@ -71,7 +71,6 @@ export function TasksSection() {
     setEditorOpen(true);
   };
 
-  // ✅ confirm create -> backend POST
   const confirmCreate = async () => {
     const title = draft.title.trim();
     if (!title) {
@@ -83,14 +82,13 @@ export function TasksSection() {
       const created = await createTask({
         title,
         note: draft.note,
-        dueAt: draft.dueAt ? new Date(draft.dueAt).toISOString() : null, // ✅ null clears
+        dueAt: draft.dueAt ? new Date(draft.dueAt).toISOString() : null, 
         status: draft.status,
       });
 
       setEditorOpen(false);
       setIsCreating(false);
 
-      // optional: open the created task
       setSelectedId(created.id);
 
       toast.success("Task created");
@@ -100,7 +98,6 @@ export function TasksSection() {
     }
   };
 
-  // ✅ delete -> backend DELETE
   const handleDelete = async () => {
     if (!selected) return;
     try {
@@ -114,7 +111,6 @@ export function TasksSection() {
     }
   };
 
-  // ✅ move -> backend PATCH status
   const moveTask = async (id: string, status: TaskStatus) => {
     try {
       await updateTask({ taskId: id, payload: { status } });
@@ -124,7 +120,6 @@ export function TasksSection() {
     }
   };
 
-  // Confirm update (explicit) when editing an existing task
   const confirmUpdate = async () => {
     if (!selected) return;
 
@@ -154,7 +149,6 @@ export function TasksSection() {
   };
 
   const cancelEdit = () => {
-    // revert draft to selected's current values and close dialog
     if (selected) {
       setDraft({
         title: selected.title ?? "",
@@ -172,7 +166,7 @@ export function TasksSection() {
       <KanbanBoard
         q={q}
         onQChange={setQ}
-        tasks={tasks.map(task => ({ ...task, dueAt: task.dueAt ?? undefined }))} // backend already filters by q; still fine if you keep server filter
+        tasks={tasks.map(task => ({ ...task, dueAt: task.dueAt ?? undefined }))} 
         onCreate={createTaskDialog}
         onOpen={openTask}
         onMove={moveTask}
@@ -192,12 +186,10 @@ export function TasksSection() {
         onCancelEdit={cancelEdit}
       />
 
-      {/* optional loading hint */}
       {isLoading ? (
-        <div className="mt-3 text-xs text-white/50">Loading tasks…</div>
+        <OrbitLoader />
       ) : null}
 
-      {/* optional mutation hint */}
       {(creating || updating || deleting) ? (
         <div className="mt-1 text-xs text-white/40">Syncing…</div>
       ) : null}
